@@ -96,7 +96,7 @@ export interface UserInfo {
  * 用户注册
  */
 export async function register(username: string, password: string): Promise<AuthUser> {
-  return apiRequest<AuthUser>('/auth/register', {
+  return apiRequest<AuthUser>('/auth?action=register', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
@@ -106,7 +106,7 @@ export async function register(username: string, password: string): Promise<Auth
  * 用户登录
  */
 export async function login(username: string, password: string): Promise<AuthUser> {
-  return apiRequest<AuthUser>('/auth/login', {
+  return apiRequest<AuthUser>('/auth?action=login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
@@ -116,7 +116,7 @@ export async function login(username: string, password: string): Promise<AuthUse
  * 获取当前用户信息
  */
 export async function getCurrentUser(): Promise<UserInfo> {
-  return apiRequest<UserInfo>('/auth/me');
+  return apiRequest<UserInfo>('/auth');
 }
 
 // ============ AI API ============
@@ -174,7 +174,7 @@ export interface HistoryItem {
  * 搜索知识点笔记
  */
 export async function searchNotes(query: string, subject?: string): Promise<NotesResult> {
-  return apiRequest<NotesResult>('/notes/search', {
+  return apiRequest<NotesResult>('/notes?action=search', {
     method: 'POST',
     body: JSON.stringify({ query, subject }),
   });
@@ -184,14 +184,14 @@ export async function searchNotes(query: string, subject?: string): Promise<Note
  * 获取搜索历史
  */
 export async function getSearchHistory(limit: number = 20): Promise<{ items: HistoryItem[]; total: number }> {
-  return apiRequest<{ items: HistoryItem[]; total: number }>(`/notes/history?limit=${limit}`);
+  return apiRequest<{ items: HistoryItem[]; total: number }>(`/notes?action=history&limit=${limit}`);
 }
 
 /**
  * 清空搜索历史
  */
 export async function clearSearchHistory(): Promise<void> {
-  return apiRequest<void>('/notes/history', { method: 'DELETE' });
+  return apiRequest<void>('/notes?action=history', { method: 'DELETE' });
 }
 
 // ============ 错题本 API ============

@@ -88,21 +88,21 @@ export interface AuthUser {
 }
 
 export async function register(username: string, password: string): Promise<AuthUser> {
-  return apiRequest<AuthUser>('/auth/register', {
+  return apiRequest<AuthUser>('/auth?action=register', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
 }
 
 export async function login(username: string, password: string): Promise<AuthUser> {
-  return apiRequest<AuthUser>('/auth/login', {
+  return apiRequest<AuthUser>('/auth?action=login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
 }
 
 export async function getCurrentUser(): Promise<any> {
-  return apiRequest<any>('/auth/me');
+  return apiRequest<any>('/auth');
 }
 
 // ============ AI API ============
@@ -130,7 +130,7 @@ export interface NotesResult {
 }
 
 export async function searchNotes(query: string, subject?: string): Promise<NotesResult> {
-  return apiRequest<NotesResult>('/notes/search', {
+  return apiRequest<NotesResult>('/notes?action=search', {
     method: 'POST',
     body: JSON.stringify({ query, subject }),
   });
