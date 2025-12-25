@@ -2,10 +2,10 @@
  * API 常量配置
  */
 
-// API 基础 URL - 部署后更换为实际地址
+// API 基础 URL - 已配置为 Vercel 部署地址
 export const API_BASE_URL = __DEV__ 
   ? 'http://10.0.2.2:3000/api'  // Android 模拟器访问本机
-  : 'https://your-vercel-app.vercel.app/api';  // 生产环境
+  : 'https://gaokao-review-tonys-projects-22b9def7.vercel.app/api';  // 生产环境
 
 // 学科配置
 export const SUBJECTS = [
