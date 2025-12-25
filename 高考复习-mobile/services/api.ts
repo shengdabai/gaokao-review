@@ -115,7 +115,7 @@ export interface AnalyzeResult {
 }
 
 export async function analyzeImage(imageBase64: string, subject?: string): Promise<AnalyzeResult> {
-  return apiRequest<AnalyzeResult>('/ai/analyze', {
+  return apiRequest<AnalyzeResult>('/ai?action=analyze', {
     method: 'POST',
     body: JSON.stringify({ image: imageBase64, subject }),
   });
@@ -170,14 +170,14 @@ export async function addMistake(data: {
 }
 
 export async function deleteMistake(id: string): Promise<void> {
-  return apiRequest(`/mistakes/${id}`, { method: 'DELETE' });
+  return apiRequest(`/mistakes?id=${id}`, { method: 'DELETE' });
 }
 
 export async function syncMistakes(data: {
   lastSyncTime?: string;
   localMistakes?: any[];
 }): Promise<any> {
-  return apiRequest('/mistakes/sync', {
+  return apiRequest('/mistakes?action=sync', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -202,7 +202,7 @@ export async function chatWithTutor(data: {
   topic?: string;
   mode?: 'learn' | 'review' | 'quiz';
 }): Promise<TutorResponse> {
-  return apiRequest<TutorResponse>('/ai/tutor', {
+  return apiRequest<TutorResponse>('/ai?action=tutor', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -227,7 +227,7 @@ export async function getStudyProgress(subject?: string): Promise<StudyProgressR
 // ============ 试题分析预测 API ============
 
 export async function predictExam(subject: string, topic?: string): Promise<any> {
-  return apiRequest('/ai/predict', {
+  return apiRequest('/ai?action=predict', {
     method: 'POST',
     body: JSON.stringify({ subject, topic }),
   });

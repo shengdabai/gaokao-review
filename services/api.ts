@@ -138,7 +138,7 @@ export interface AskResult {
  * AI 图片分析
  */
 export async function analyzeImage(image: string, subject?: string): Promise<AnalyzeResult> {
-  return apiRequest<AnalyzeResult>('/ai/analyze', {
+  return apiRequest<AnalyzeResult>('/ai?action=analyze', {
     method: 'POST',
     body: JSON.stringify({ image, subject }),
   });
@@ -148,7 +148,7 @@ export async function analyzeImage(image: string, subject?: string): Promise<Ana
  * AI 文本问答
  */
 export async function askQuestion(question: string, subject?: string, context?: string): Promise<AskResult> {
-  return apiRequest<AskResult>('/ai/ask', {
+  return apiRequest<AskResult>('/ai?action=ask', {
     method: 'POST',
     body: JSON.stringify({ question, subject, context }),
   });
@@ -237,7 +237,7 @@ export async function getMistakes(
  * 获取单条错题
  */
 export async function getMistake(id: string): Promise<MistakeItem> {
-  return apiRequest<MistakeItem>(`/mistakes/${id}`);
+  return apiRequest<MistakeItem>(`/mistakes?id=${id}`);
 }
 
 /**
@@ -259,7 +259,7 @@ export async function addMistake(data: {
  * 删除错题
  */
 export async function deleteMistake(id: string): Promise<void> {
-  return apiRequest<void>(`/mistakes/${id}`, { method: 'DELETE' });
+  return apiRequest<void>(`/mistakes?id=${id}`, { method: 'DELETE' });
 }
 
 /**
@@ -273,7 +273,7 @@ export async function syncMistakes(data: {
   syncResults: { id: string; status: string }[];
   serverMistakes: MistakeItem[];
 }> {
-  return apiRequest('/mistakes/sync', {
+  return apiRequest('/mistakes?action=sync', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -301,7 +301,7 @@ export async function chatWithTutor(data: {
   topic?: string;
   mode?: 'learn' | 'review' | 'quiz';
 }): Promise<TutorResponse> {
-  return apiRequest<TutorResponse>('/ai/tutor', {
+  return apiRequest<TutorResponse>('/ai?action=tutor', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -404,7 +404,7 @@ export interface PredictResult {
  * 高考试题分析与预测
  */
 export async function predictExam(subject: string, topic?: string): Promise<PredictResult> {
-  return apiRequest<PredictResult>('/ai/predict', {
+  return apiRequest<PredictResult>('/ai?action=predict', {
     method: 'POST',
     body: JSON.stringify({ subject, topic }),
   });
