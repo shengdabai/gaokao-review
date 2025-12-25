@@ -2,10 +2,8 @@
  * API 常量配置
  */
 
-// API 基础 URL - 已配置为 Vercel 部署地址
-export const API_BASE_URL = __DEV__ 
-  ? 'http://10.0.2.2:3000/api'  // Android 模拟器访问本机
-  : 'https://gaokao-review-tonys-projects-22b9def7.vercel.app/api';  // 生产环境
+// API 基础 URL - Vercel 部署地址
+export const API_BASE_URL = 'https://gaokao-review.vercel.app/api';
 
 // 学科配置
 export const SUBJECTS = [

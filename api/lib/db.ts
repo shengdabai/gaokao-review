@@ -1,158 +1,285 @@
 /**
- * SQLite 数据库管理模块
- * 用于初始化数据库和提供数据库操作方法
+ * 内存数据库模块（Vercel Serverless 兼容版）
+ * 注意：数据在函数冷启动时会重置，仅用于演示
  */
 
-import Database from 'better-sqlite3';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-// 数据库文件路径
-const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'gaokao.db');
+// 内存存储
+interface User {
+  id: string;
+  username: string;
+  password_hash: string;
+  created_at: string;
+  updated_at: string;
+}
 
-// 创建数据库实例
-let db: Database.Database | null = null;
+interface Mistake {
+  id: string;
+  user_id: string;
+  subject: string;
+  image_data: string;
+  analysis: string;
+  tags: string;
+  created_at: string;
+  updated_at: string;
+  sync_status: string;
+}
 
-/**
- * 获取数据库实例
- * @returns SQLite 数据库实例
- */
-export function getDatabase(): Database.Database {
+interface SearchHistory {
+  id: string;
+  user_id: string;
+  query: string;
+  subject: string | null;
+  created_at: string;
+}
+
+interface StudyProgress {
+  id: string;
+  user_id: string;
+  subject: string;
+  topic: string;
+  mastery_level: number;
+  times_studied: number;
+  times_correct: number;
+  times_wrong: number;
+  last_studied_at: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface TutorSession {
+  id: string;
+  user_id: string;
+  subject: string;
+  topic: string | null;
+  session_type: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface TutorMessage {
+  id: string;
+  session_id: string;
+  role: string;
+  content: string;
+  message_type: string;
+  created_at: string;
+}
+
+// 全局内存存储
+const store = {
+  users: new Map<string, User>(),
+  mistakes: new Map<string, Mistake>(),
+  searchHistory: new Map<string, SearchHistory>(),
+  studyProgress: new Map<string, StudyProgress>(),
+  tutorSessions: new Map<string, TutorSession>(),
+  tutorMessages: new Map<string, TutorMessage>(),
+};
+
+// 模拟 better-sqlite3 的 API
+class MemoryStatement {
+  private sql: string;
+
+  constructor(sql: string) {
+    this.sql = sql;
+  }
+
+  run(...params: any[]): { changes: number } {
+    const sql = this.sql.toLowerCase();
+
+    if (sql.includes('insert into users')) {
+      const [id, username, password_hash, created_at, updated_at] = params;
+      store.users.set(id, { id, username, password_hash, created_at, updated_at });
+      return { changes: 1 };
+    }
+
+    if (sql.includes('insert into mistakes')) {
+      const [id, user_id, subject, image_data, analysis, tags, created_at, updated_at] = params;
+      store.mistakes.set(id, { id, user_id, subject, image_data, analysis, tags, created_at, updated_at, sync_status: 'synced' });
+      return { changes: 1 };
+    }
+
+    if (sql.includes('insert into search_history')) {
+      const [id, user_id, query, subject, created_at] = params;
+      store.searchHistory.set(id, { id, user_id, query, subject, created_at });
+      return { changes: 1 };
+    }
+
+    if (sql.includes('insert into study_progress')) {
+      const [id, user_id, subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at, created_at, updated_at] = params;
+      store.studyProgress.set(id, { id, user_id, subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at, notes: '', created_at, updated_at });
+      return { changes: 1 };
+    }
+
+    if (sql.includes('insert into tutor_sessions')) {
+      const [id, user_id, subject, topic, session_type, status, created_at, updated_at] = params;
+      store.tutorSessions.set(id, { id, user_id, subject, topic, session_type, status, created_at, updated_at });
+      return { changes: 1 };
+    }
+
+    if (sql.includes('insert into tutor_messages')) {
+      const [id, session_id, role, content, message_type, created_at] = params;
+      store.tutorMessages.set(id, { id, session_id, role, content, message_type, created_at });
+      return { changes: 1 };
+    }
+
+    if (sql.includes('delete from mistakes')) {
+      const [id] = params;
+      store.mistakes.delete(id);
+      return { changes: 1 };
+    }
+
+    if (sql.includes('delete from search_history')) {
+      const [user_id] = params;
+      for (const [id, h] of store.searchHistory) {
+        if (h.user_id === user_id) store.searchHistory.delete(id);
+      }
+      return { changes: 1 };
+    }
+
+    if (sql.includes('update study_progress')) {
+      // 简化处理
+      return { changes: 0 };
+    }
+
+    if (sql.includes('update mistakes')) {
+      return { changes: 1 };
+    }
+
+    return { changes: 0 };
+  }
+
+  get(...params: any[]): any {
+    const sql = this.sql.toLowerCase();
+
+    if (sql.includes('from users where username')) {
+      const [username] = params;
+      for (const user of store.users.values()) {
+        if (user.username === username) return user;
+      }
+      return undefined;
+    }
+
+    if (sql.includes('from users where id')) {
+      const [id] = params;
+      return store.users.get(id);
+    }
+
+    if (sql.includes('count(*) as total from mistakes')) {
+      const [user_id] = params;
+      let total = 0, math = 0, physics = 0, chemistry = 0, chinese = 0, english = 0, politics = 0;
+      for (const m of store.mistakes.values()) {
+        if (m.user_id === user_id) {
+          total++;
+          if (m.subject === 'math') math++;
+          if (m.subject === 'physics') physics++;
+          if (m.subject === 'chemistry') chemistry++;
+          if (m.subject === 'chinese') chinese++;
+          if (m.subject === 'english') english++;
+          if (m.subject === 'politics') politics++;
+        }
+      }
+      return { total, math, physics, chemistry, chinese, english, politics };
+    }
+
+    if (sql.includes('from mistakes where id')) {
+      const [id, user_id] = params;
+      const m = store.mistakes.get(id);
+      if (m && m.user_id === user_id) return m;
+      return undefined;
+    }
+
+    if (sql.includes('from tutor_sessions where id')) {
+      const [id, user_id] = params;
+      const s = store.tutorSessions.get(id);
+      if (s && s.user_id === user_id) return s;
+      return undefined;
+    }
+
+    if (sql.includes('from study_progress where user_id') && sql.includes('and subject') && sql.includes('and topic')) {
+      return undefined; // 简化
+    }
+
+    return undefined;
+  }
+
+  all(...params: any[]): any[] {
+    const sql = this.sql.toLowerCase();
+
+    if (sql.includes('from mistakes') && sql.includes('where user_id')) {
+      const [user_id] = params;
+      const results: Mistake[] = [];
+      for (const m of store.mistakes.values()) {
+        if (m.user_id === user_id) results.push(m);
+      }
+      return results.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+
+    if (sql.includes('from search_history')) {
+      const [user_id] = params;
+      const results: SearchHistory[] = [];
+      for (const h of store.searchHistory.values()) {
+        if (h.user_id === user_id) results.push(h);
+      }
+      return results.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+
+    if (sql.includes('from study_progress')) {
+      const [user_id] = params;
+      const results: StudyProgress[] = [];
+      for (const p of store.studyProgress.values()) {
+        if (p.user_id === user_id) results.push(p);
+      }
+      return results;
+    }
+
+    if (sql.includes('from tutor_messages')) {
+      const [session_id] = params;
+      const results: TutorMessage[] = [];
+      for (const m of store.tutorMessages.values()) {
+        if (m.session_id === session_id) results.push(m);
+      }
+      return results.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+
+    return [];
+  }
+}
+
+class MemoryDatabase {
+  prepare(sql: string): MemoryStatement {
+    return new MemoryStatement(sql);
+  }
+
+  exec(_sql: string): void {
+    // 表创建在内存中自动处理
+  }
+
+  pragma(_pragma: string): void {
+    // 忽略
+  }
+
+  close(): void {
+    // 忽略
+  }
+}
+
+let db: MemoryDatabase | null = null;
+
+export function getDatabase(): MemoryDatabase {
   if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    initTables();
+    db = new MemoryDatabase();
   }
   return db;
 }
 
-/**
- * 初始化数据库表结构
- */
-function initTables(): void {
-  const database = db!;
-
-  // 用户表
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // 错题表
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS mistakes (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      subject TEXT NOT NULL,
-      image_data TEXT NOT NULL,
-      analysis TEXT NOT NULL,
-      tags TEXT DEFAULT '[]',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      sync_status TEXT DEFAULT 'synced',
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `);
-
-  // 搜索历史表
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS search_history (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      query TEXT NOT NULL,
-      subject TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `);
-
-  // 学习进度表 - 跟踪每个知识点的掌握程度
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS study_progress (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      subject TEXT NOT NULL,
-      topic TEXT NOT NULL,
-      mastery_level INTEGER DEFAULT 0,
-      times_studied INTEGER DEFAULT 0,
-      times_correct INTEGER DEFAULT 0,
-      times_wrong INTEGER DEFAULT 0,
-      last_studied_at TEXT,
-      notes TEXT DEFAULT '',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE(user_id, subject, topic)
-    )
-  `);
-
-  // AI导师对话历史表 - 记录苏格拉底式学习对话
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS tutor_sessions (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      subject TEXT NOT NULL,
-      topic TEXT,
-      session_type TEXT DEFAULT 'learn',
-      status TEXT DEFAULT 'active',
-      summary TEXT DEFAULT '',
-      topics_covered TEXT DEFAULT '[]',
-      knowledge_gaps TEXT DEFAULT '[]',
-      mastered_concepts TEXT DEFAULT '[]',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `);
-
-  // 对话消息表
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS tutor_messages (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      content TEXT NOT NULL,
-      message_type TEXT DEFAULT 'chat',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (session_id) REFERENCES tutor_sessions(id) ON DELETE CASCADE
-    )
-  `);
-
-  // 创建索引
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-    CREATE INDEX IF NOT EXISTS idx_mistakes_user_id ON mistakes(user_id);
-    CREATE INDEX IF NOT EXISTS idx_mistakes_subject ON mistakes(subject);
-    CREATE INDEX IF NOT EXISTS idx_mistakes_created_at ON mistakes(created_at);
-    CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id);
-    CREATE INDEX IF NOT EXISTS idx_study_progress_user_id ON study_progress(user_id);
-    CREATE INDEX IF NOT EXISTS idx_study_progress_subject ON study_progress(subject);
-    CREATE INDEX IF NOT EXISTS idx_tutor_sessions_user_id ON tutor_sessions(user_id);
-    CREATE INDEX IF NOT EXISTS idx_tutor_messages_session_id ON tutor_messages(session_id);
-  `);
-}
-
-/**
- * 生成 UUID
- * @returns 新的 UUID 字符串
- */
 export function generateId(): string {
   return uuidv4();
 }
 
-/**
- * 关闭数据库连接
- */
 export function closeDatabase(): void {
-  if (db) {
-    db.close();
-    db = null;
-  }
+  db = null;
 }
-
-
