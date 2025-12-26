@@ -9,10 +9,10 @@ import { v4 as uuidv4 } from 'uuid';
 // 获取数据库连接字符串
 function getConnectionString(): string {
   // Vercel Postgres 可能使用不同的环境变量名
-  const url = process.env.POSTGRES_URL 
-    || process.env.DATABASE_URL 
+  const url = process.env.POSTGRES_URL
+    || process.env.DATABASE_URL
     || process.env.POSTGRES_URL_NON_POOLING;
-  
+
   if (!url) {
     throw new Error('数据库连接字符串未配置。请在 Vercel 环境变量中设置 POSTGRES_URL');
   }
