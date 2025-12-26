@@ -47,12 +47,12 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = getToken();
-
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
-
+  
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
@@ -228,7 +228,7 @@ export async function getMistakes(
   if (options.tag) params.append('tag', options.tag);
   if (options.page) params.append('page', options.page.toString());
   if (options.limit) params.append('limit', options.limit.toString());
-
+  
   const query = params.toString();
   return apiRequest<MistakeListResult>(`/mistakes${query ? `?${query}` : ''}`);
 }

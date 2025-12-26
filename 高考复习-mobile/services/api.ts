@@ -52,12 +52,12 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = await getToken();
-
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
-
+  
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
@@ -152,7 +152,7 @@ export async function getMistakes(options: { subject?: string; page?: number; li
   if (options.subject) params.append('subject', options.subject);
   if (options.page) params.append('page', options.page.toString());
   if (options.limit) params.append('limit', options.limit.toString());
-
+  
   const query = params.toString();
   return apiRequest(`/mistakes${query ? `?${query}` : ''}`);
 }
