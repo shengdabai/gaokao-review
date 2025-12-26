@@ -27,13 +27,6 @@ interface RegisterBody {
     password: string;
 }
 
-interface UserRecord {
-    id: string;
-    username: string;
-    password_hash?: string;
-    created_at?: string;
-}
-
 // 登录处理
 async function handleLogin(req: VercelRequest, res: VercelResponse) {
     const { username, password } = req.body as LoginBody;
@@ -43,15 +36,13 @@ async function handleLogin(req: VercelRequest, res: VercelResponse) {
     }
 
     const db = getDatabase();
-    const user = db
-        .prepare('SELECT id, username, password_hash FROM users WHERE username = ?')
-        .get(username) as UserRecord | undefined;
+    const user = await db.getUserByUsername(username);
 
     if (!user) {
         return sendPredefinedError(res, 'INVALID_CREDENTIALS');
     }
 
-    const isValid = await verifyPassword(password, user.password_hash!);
+    const isValid = await verifyPassword(password, user.password_hash);
     if (!isValid) {
         return sendPredefinedError(res, 'INVALID_CREDENTIALS');
     }
@@ -77,7 +68,7 @@ async function handleRegister(req: VercelRequest, res: VercelResponse) {
     }
 
     const db = getDatabase();
-    const existingUser = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    const existingUser = await db.getUserByUsername(username);
 
     if (existingUser) {
         return sendPredefinedError(res, 'USERNAME_EXISTS');
@@ -85,12 +76,8 @@ async function handleRegister(req: VercelRequest, res: VercelResponse) {
 
     const userId = generateId();
     const passwordHash = await hashPassword(password);
-    const now = new Date().toISOString();
 
-    db.prepare(`
-    INSERT INTO users (id, username, password_hash, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(userId, username, passwordHash, now, now);
+    await db.createUser(userId, username, passwordHash);
 
     const token = generateToken({ userId, username });
     return sendSuccess(res, { userId, username, token }, 201);
@@ -104,41 +91,27 @@ async function handleGetMe(req: VercelRequest, res: VercelResponse) {
     }
 
     const db = getDatabase();
-    const user = db
-        .prepare('SELECT id, username, created_at FROM users WHERE id = ?')
-        .get(auth.userId) as UserRecord | undefined;
+    const user = await db.getUserById(auth.userId);
 
     if (!user) {
         return sendPredefinedError(res, 'NOT_FOUND', '用户不存在');
     }
 
-    const mistakeStats = db
-        .prepare(`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(CASE WHEN subject = 'math' THEN 1 END) as math,
-        COUNT(CASE WHEN subject = 'physics' THEN 1 END) as physics,
-        COUNT(CASE WHEN subject = 'chemistry' THEN 1 END) as chemistry,
-        COUNT(CASE WHEN subject = 'chinese' THEN 1 END) as chinese,
-        COUNT(CASE WHEN subject = 'english' THEN 1 END) as english,
-        COUNT(CASE WHEN subject = 'politics' THEN 1 END) as politics
-      FROM mistakes WHERE user_id = ?
-    `)
-        .get(auth.userId) as any;
+    const mistakeStats = await db.getMistakesStats(auth.userId);
 
     return sendSuccess(res, {
         userId: user.id,
         username: user.username,
         createdAt: user.created_at,
         stats: {
-            totalMistakes: mistakeStats.total,
+            totalMistakes: parseInt(mistakeStats.total) || 0,
             bySubject: {
-                math: mistakeStats.math,
-                physics: mistakeStats.physics,
-                chemistry: mistakeStats.chemistry,
-                chinese: mistakeStats.chinese,
-                english: mistakeStats.english,
-                politics: mistakeStats.politics,
+                math: parseInt(mistakeStats.math) || 0,
+                physics: parseInt(mistakeStats.physics) || 0,
+                chemistry: parseInt(mistakeStats.chemistry) || 0,
+                chinese: parseInt(mistakeStats.chinese) || 0,
+                english: parseInt(mistakeStats.english) || 0,
+                politics: parseInt(mistakeStats.politics) || 0,
             },
         },
     });
@@ -166,4 +139,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return sendPredefinedError(res, 'INTERNAL_ERROR');
     }
 }
-
