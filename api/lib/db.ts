@@ -26,12 +26,22 @@ let pool: Pool | null = null;
 function getPool(): Pool {
   if (!pool) {
     const connectionString = getConnectionString();
+    // Neon 数据库需要 SSL，但可以使用 rejectUnauthorized: false
     pool = new Pool({
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: connectionString.includes('neon.tech') || connectionString.includes('neon') 
+        ? { rejectUnauthorized: false }
+        : connectionString.includes('sslmode=require') || connectionString.includes('sslmode=prefer')
+        ? { rejectUnauthorized: false }
+        : false,
       max: 5,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
+    });
+    
+    // 监听连接错误
+    pool.on('error', (err) => {
+      console.error('Unexpected database pool error:', err);
     });
   }
   return pool;
@@ -49,7 +59,12 @@ async function query(text: string, params?: any[]): Promise<any> {
     const result = await p.query(text, params);
     return result;
   } catch (error: any) {
-    console.error('Database query error:', error.message);
+    console.error('Database query error:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      query: text.substring(0, 100),
+    });
     throw error;
   }
 }

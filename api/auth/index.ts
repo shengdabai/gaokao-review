@@ -134,8 +134,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else {
             return sendPredefinedError(res, 'METHOD_NOT_ALLOWED');
         }
-    } catch (error) {
-        console.error('Auth error:', error);
-        return sendPredefinedError(res, 'INTERNAL_ERROR');
+    } catch (error: any) {
+        console.error('Auth error:', {
+            message: error?.message || 'Unknown error',
+            stack: error?.stack,
+            name: error?.name,
+        });
+        // 确保返回 JSON 格式的错误
+        return sendError(res, 'INTERNAL_ERROR', error?.message || '服务器内部错误', 500);
     }
 }
