@@ -1,19 +1,40 @@
 /**
  * PostgreSQL 数据库模块
- * 使用 pg 库连接 Vercel Postgres / Prisma Postgres
+ * 使用 pg 库连接 Vercel Postgres (Neon)
  */
 
-import { Pool, PoolClient } from 'pg';
+import { Pool } from 'pg';
 import { v4 as uuidv4 } from 'uuid';
 
-// 创建连接池
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
+// 获取数据库连接字符串
+function getConnectionString(): string {
+  // Vercel Postgres 可能使用不同的环境变量名
+  const url = process.env.POSTGRES_URL 
+    || process.env.DATABASE_URL 
+    || process.env.POSTGRES_URL_NON_POOLING;
+  
+  if (!url) {
+    throw new Error('数据库连接字符串未配置。请在 Vercel 环境变量中设置 POSTGRES_URL');
+  }
+  return url;
+}
+
+// 创建连接池（延迟初始化）
+let pool: Pool | null = null;
+
+function getPool(): Pool {
+  if (!pool) {
+    const connectionString = getConnectionString();
+    pool = new Pool({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+  }
+  return pool;
+}
 
 // 标记是否已初始化表
 let tablesInitialized = false;
@@ -22,12 +43,13 @@ let tablesInitialized = false;
  * 执行 SQL 查询
  */
 async function query(text: string, params?: any[]): Promise<any> {
-  const client = await pool.connect();
+  const p = getPool();
   try {
-    const result = await client.query(text, params);
+    const result = await p.query(text, params);
     return result;
-  } finally {
-    client.release();
+  } catch (error: any) {
+    console.error('Database query error:', error.message);
+    throw error;
   }
 }
 
@@ -37,6 +59,8 @@ async function query(text: string, params?: any[]): Promise<any> {
 async function initTables(): Promise<void> {
   if (tablesInitialized) return;
 
+  console.log('Initializing database tables...');
+
   try {
     // 用户表
     await query(`
@@ -44,8 +68,8 @@ async function initTables(): Promise<void> {
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
@@ -58,8 +82,8 @@ async function initTables(): Promise<void> {
         image_data TEXT NOT NULL,
         analysis TEXT NOT NULL,
         tags TEXT DEFAULT '[]',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
         sync_status TEXT DEFAULT 'synced'
       )
     `);
@@ -71,7 +95,7 @@ async function initTables(): Promise<void> {
         user_id TEXT NOT NULL,
         query TEXT NOT NULL,
         subject TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
@@ -86,10 +110,10 @@ async function initTables(): Promise<void> {
         times_studied INTEGER DEFAULT 0,
         times_correct INTEGER DEFAULT 0,
         times_wrong INTEGER DEFAULT 0,
-        last_studied_at TIMESTAMP,
+        last_studied_at TIMESTAMPTZ,
         notes TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(user_id, subject, topic)
       )
     `);
@@ -103,8 +127,8 @@ async function initTables(): Promise<void> {
         topic TEXT,
         session_type TEXT DEFAULT 'learn',
         status TEXT DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
@@ -116,33 +140,14 @@ async function initTables(): Promise<void> {
         role TEXT NOT NULL,
         content TEXT NOT NULL,
         message_type TEXT DEFAULT 'chat',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
-    // 创建索引（忽略已存在的错误）
-    const indexes = [
-      'CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)',
-      'CREATE INDEX IF NOT EXISTS idx_mistakes_user_id ON mistakes(user_id)',
-      'CREATE INDEX IF NOT EXISTS idx_mistakes_subject ON mistakes(subject)',
-      'CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id)',
-      'CREATE INDEX IF NOT EXISTS idx_study_progress_user_id ON study_progress(user_id)',
-      'CREATE INDEX IF NOT EXISTS idx_tutor_sessions_user_id ON tutor_sessions(user_id)',
-      'CREATE INDEX IF NOT EXISTS idx_tutor_messages_session_id ON tutor_messages(session_id)',
-    ];
-
-    for (const sql of indexes) {
-      try {
-        await query(sql);
-      } catch (e) {
-        // 忽略索引创建错误
-      }
-    }
-
     tablesInitialized = true;
-    console.log('Database tables initialized');
-  } catch (error) {
-    console.error('Failed to initialize tables:', error);
+    console.log('Database tables initialized successfully');
+  } catch (error: any) {
+    console.error('Failed to initialize tables:', error.message);
     throw error;
   }
 }
@@ -176,10 +181,9 @@ class Database {
 
   async createUser(id: string, username: string, passwordHash: string): Promise<void> {
     await this.ensureInitialized();
-    const now = new Date().toISOString();
     await query(
-      'INSERT INTO users (id, username, password_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)',
-      [id, username, passwordHash, now, now]
+      'INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3)',
+      [id, username, passwordHash]
     );
   }
 
@@ -235,10 +239,9 @@ class Database {
 
   async createMistake(id: string, userId: string, subject: string, imageData: string, analysis: string, tags: string): Promise<void> {
     await this.ensureInitialized();
-    const now = new Date().toISOString();
     await query(
-      'INSERT INTO mistakes (id, user_id, subject, image_data, analysis, tags, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-      [id, userId, subject, imageData, analysis, tags, now, now]
+      'INSERT INTO mistakes (id, user_id, subject, image_data, analysis, tags) VALUES ($1, $2, $3, $4, $5, $6)',
+      [id, userId, subject, imageData, analysis, tags]
     );
   }
 
@@ -260,10 +263,9 @@ class Database {
 
   async createSearchHistory(id: string, userId: string, queryText: string, subject: string | null): Promise<void> {
     await this.ensureInitialized();
-    const now = new Date().toISOString();
     await query(
-      'INSERT INTO search_history (id, user_id, query, subject, created_at) VALUES ($1, $2, $3, $4, $5)',
-      [id, userId, queryText, subject, now]
+      'INSERT INTO search_history (id, user_id, query, subject) VALUES ($1, $2, $3, $4)',
+      [id, userId, queryText, subject]
     );
   }
 
@@ -312,11 +314,9 @@ class Database {
 
   async createTutorSession(id: string, userId: string, subject: string, topic: string | null, sessionType: string): Promise<void> {
     await this.ensureInitialized();
-    const now = new Date().toISOString();
     await query(
-      `INSERT INTO tutor_sessions (id, user_id, subject, topic, session_type, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)`,
-      [id, userId, subject, topic, sessionType, now, now]
+      `INSERT INTO tutor_sessions (id, user_id, subject, topic, session_type, status) VALUES ($1, $2, $3, $4, $5, 'active')`,
+      [id, userId, subject, topic, sessionType]
     );
   }
 
@@ -331,10 +331,9 @@ class Database {
 
   async createTutorMessage(id: string, sessionId: string, role: string, content: string, messageType: string): Promise<void> {
     await this.ensureInitialized();
-    const now = new Date().toISOString();
     await query(
-      'INSERT INTO tutor_messages (id, session_id, role, content, message_type, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
-      [id, sessionId, role, content, messageType, now]
+      'INSERT INTO tutor_messages (id, session_id, role, content, message_type) VALUES ($1, $2, $3, $4, $5)',
+      [id, sessionId, role, content, messageType]
     );
   }
 }
@@ -360,5 +359,8 @@ export function generateId(): string {
  * 关闭数据库连接
  */
 export async function closeDatabase(): Promise<void> {
-  await pool.end();
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
 }
