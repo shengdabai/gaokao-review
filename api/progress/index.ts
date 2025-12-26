@@ -5,8 +5,9 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { sql } from '@vercel/postgres';
 import { authenticateRequest } from '../lib/auth';
-import { getDatabase, generateId } from '../lib/db';
+import { generateId } from '../lib/db';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
 
 /**
@@ -63,28 +64,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return sendPredefinedError(res, 'UNAUTHORIZED');
     }
 
-    const db = getDatabase();
-
     if (req.method === 'GET') {
         // 获取学习进度
         try {
             const { subject } = req.query;
 
-            let query = `
-        SELECT subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at
-        FROM study_progress
-        WHERE user_id = ?
-      `;
-            const params: any[] = [auth.userId];
-
+            let progress: any[];
             if (subject && typeof subject === 'string') {
-                query += ' AND subject = ?';
-                params.push(subject);
+                const result = await sql`
+                    SELECT subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at
+                    FROM study_progress
+                    WHERE user_id = ${auth.userId} AND subject = ${subject}
+                    ORDER BY subject, mastery_level ASC
+                `;
+                progress = result.rows;
+            } else {
+                const result = await sql`
+                    SELECT subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at
+                    FROM study_progress
+                    WHERE user_id = ${auth.userId}
+                    ORDER BY subject, mastery_level ASC
+                `;
+                progress = result.rows;
             }
-
-            query += ' ORDER BY subject, mastery_level ASC';
-
-            const progress = db.prepare(query).all(...params) as any[];
 
             // 计算总体统计
             const stats = {
@@ -178,24 +180,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const now = new Date().toISOString();
 
             // 检查是否存在
-            const existing = db.prepare(`
-        SELECT id, mastery_level, times_studied FROM study_progress
-        WHERE user_id = ? AND subject = ? AND topic = ?
-      `).get(auth.userId, subject, topic) as any;
+            const existingResult = await sql`
+                SELECT id, mastery_level, times_studied FROM study_progress
+                WHERE user_id = ${auth.userId} AND subject = ${subject} AND topic = ${topic}
+            `;
+            const existing = existingResult.rows[0];
 
             if (existing) {
                 // 更新
                 const newMastery = Math.max(0, Math.min(100, existing.mastery_level + (masteryChange || 0)));
 
-                db.prepare(`
-          UPDATE study_progress
-          SET mastery_level = ?,
-              times_studied = times_studied + 1,
-              notes = COALESCE(?, notes),
-              last_studied_at = ?,
-              updated_at = ?
-          WHERE id = ?
-        `).run(newMastery, notes || null, now, now, existing.id);
+                await sql`
+                    UPDATE study_progress
+                    SET mastery_level = ${newMastery},
+                        times_studied = times_studied + 1,
+                        notes = COALESCE(${notes || null}, notes),
+                        last_studied_at = ${now},
+                        updated_at = ${now}
+                    WHERE id = ${existing.id}
+                `;
 
                 return sendSuccess(res, {
                     id: existing.id,
@@ -207,10 +210,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const id = generateId();
                 const initialMastery = Math.max(0, Math.min(100, masteryChange || 10));
 
-                db.prepare(`
-          INSERT INTO study_progress (id, user_id, subject, topic, mastery_level, times_studied, notes, last_studied_at, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
-        `).run(id, auth.userId, subject, topic, initialMastery, notes || '', now, now, now);
+                await sql`
+                    INSERT INTO study_progress (id, user_id, subject, topic, mastery_level, times_studied, notes, last_studied_at, created_at, updated_at)
+                    VALUES (${id}, ${auth.userId}, ${subject}, ${topic}, ${initialMastery}, 1, ${notes || ''}, ${now}, ${now}, ${now})
+                `;
 
                 return sendSuccess(res, {
                     id,
@@ -227,4 +230,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return sendPredefinedError(res, 'METHOD_NOT_ALLOWED');
 }
-

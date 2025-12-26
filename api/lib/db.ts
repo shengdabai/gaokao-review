@@ -1,285 +1,343 @@
 /**
- * 内存数据库模块（Vercel Serverless 兼容版）
- * 注意：数据在函数冷启动时会重置，仅用于演示
+ * Vercel Postgres 数据库模块
+ * 持久化存储学习数据
  */
 
+import { sql } from '@vercel/postgres';
 import { v4 as uuidv4 } from 'uuid';
 
-// 内存存储
-interface User {
-  id: string;
-  username: string;
-  password_hash: string;
-  created_at: string;
-  updated_at: string;
-}
+// 标记是否已初始化表
+let tablesInitialized = false;
 
-interface Mistake {
-  id: string;
-  user_id: string;
-  subject: string;
-  image_data: string;
-  analysis: string;
-  tags: string;
-  created_at: string;
-  updated_at: string;
-  sync_status: string;
-}
+/**
+ * 初始化数据库表
+ */
+async function initTables(): Promise<void> {
+  if (tablesInitialized) return;
 
-interface SearchHistory {
-  id: string;
-  user_id: string;
-  query: string;
-  subject: string | null;
-  created_at: string;
-}
+  try {
+    // 用户表
+    await sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
 
-interface StudyProgress {
-  id: string;
-  user_id: string;
-  subject: string;
-  topic: string;
-  mastery_level: number;
-  times_studied: number;
-  times_correct: number;
-  times_wrong: number;
-  last_studied_at: string | null;
-  notes: string;
-  created_at: string;
-  updated_at: string;
-}
+    // 错题表
+    await sql`
+      CREATE TABLE IF NOT EXISTS mistakes (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        subject TEXT NOT NULL,
+        image_data TEXT NOT NULL,
+        analysis TEXT NOT NULL,
+        tags TEXT DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sync_status TEXT DEFAULT 'synced'
+      )
+    `;
 
-interface TutorSession {
-  id: string;
-  user_id: string;
-  subject: string;
-  topic: string | null;
-  session_type: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+    // 搜索历史表
+    await sql`
+      CREATE TABLE IF NOT EXISTS search_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        query TEXT NOT NULL,
+        subject TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
 
-interface TutorMessage {
-  id: string;
-  session_id: string;
-  role: string;
-  content: string;
-  message_type: string;
-  created_at: string;
-}
+    // 学习进度表
+    await sql`
+      CREATE TABLE IF NOT EXISTS study_progress (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        subject TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        mastery_level INTEGER DEFAULT 0,
+        times_studied INTEGER DEFAULT 0,
+        times_correct INTEGER DEFAULT 0,
+        times_wrong INTEGER DEFAULT 0,
+        last_studied_at TIMESTAMP,
+        notes TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, subject, topic)
+      )
+    `;
 
-// 全局内存存储
-const store = {
-  users: new Map<string, User>(),
-  mistakes: new Map<string, Mistake>(),
-  searchHistory: new Map<string, SearchHistory>(),
-  studyProgress: new Map<string, StudyProgress>(),
-  tutorSessions: new Map<string, TutorSession>(),
-  tutorMessages: new Map<string, TutorMessage>(),
-};
+    // AI导师会话表
+    await sql`
+      CREATE TABLE IF NOT EXISTS tutor_sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        subject TEXT NOT NULL,
+        topic TEXT,
+        session_type TEXT DEFAULT 'learn',
+        status TEXT DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
 
-// 模拟 better-sqlite3 的 API
-class MemoryStatement {
-  private sql: string;
+    // 对话消息表
+    await sql`
+      CREATE TABLE IF NOT EXISTS tutor_messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES tutor_sessions(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        message_type TEXT DEFAULT 'chat',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
 
-  constructor(sql: string) {
-    this.sql = sql;
-  }
+    // 创建索引
+    await sql`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_mistakes_user_id ON mistakes(user_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_mistakes_subject ON mistakes(subject)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_study_progress_user_id ON study_progress(user_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_tutor_sessions_user_id ON tutor_sessions(user_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_tutor_messages_session_id ON tutor_messages(session_id)`;
 
-  run(...params: any[]): { changes: number } {
-    const sql = this.sql.toLowerCase();
-
-    if (sql.includes('insert into users')) {
-      const [id, username, password_hash, created_at, updated_at] = params;
-      store.users.set(id, { id, username, password_hash, created_at, updated_at });
-      return { changes: 1 };
-    }
-
-    if (sql.includes('insert into mistakes')) {
-      const [id, user_id, subject, image_data, analysis, tags, created_at, updated_at] = params;
-      store.mistakes.set(id, { id, user_id, subject, image_data, analysis, tags, created_at, updated_at, sync_status: 'synced' });
-      return { changes: 1 };
-    }
-
-    if (sql.includes('insert into search_history')) {
-      const [id, user_id, query, subject, created_at] = params;
-      store.searchHistory.set(id, { id, user_id, query, subject, created_at });
-      return { changes: 1 };
-    }
-
-    if (sql.includes('insert into study_progress')) {
-      const [id, user_id, subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at, created_at, updated_at] = params;
-      store.studyProgress.set(id, { id, user_id, subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at, notes: '', created_at, updated_at });
-      return { changes: 1 };
-    }
-
-    if (sql.includes('insert into tutor_sessions')) {
-      const [id, user_id, subject, topic, session_type, status, created_at, updated_at] = params;
-      store.tutorSessions.set(id, { id, user_id, subject, topic, session_type, status, created_at, updated_at });
-      return { changes: 1 };
-    }
-
-    if (sql.includes('insert into tutor_messages')) {
-      const [id, session_id, role, content, message_type, created_at] = params;
-      store.tutorMessages.set(id, { id, session_id, role, content, message_type, created_at });
-      return { changes: 1 };
-    }
-
-    if (sql.includes('delete from mistakes')) {
-      const [id] = params;
-      store.mistakes.delete(id);
-      return { changes: 1 };
-    }
-
-    if (sql.includes('delete from search_history')) {
-      const [user_id] = params;
-      for (const [id, h] of store.searchHistory) {
-        if (h.user_id === user_id) store.searchHistory.delete(id);
-      }
-      return { changes: 1 };
-    }
-
-    if (sql.includes('update study_progress')) {
-      // 简化处理
-      return { changes: 0 };
-    }
-
-    if (sql.includes('update mistakes')) {
-      return { changes: 1 };
-    }
-
-    return { changes: 0 };
-  }
-
-  get(...params: any[]): any {
-    const sql = this.sql.toLowerCase();
-
-    if (sql.includes('from users where username')) {
-      const [username] = params;
-      for (const user of store.users.values()) {
-        if (user.username === username) return user;
-      }
-      return undefined;
-    }
-
-    if (sql.includes('from users where id')) {
-      const [id] = params;
-      return store.users.get(id);
-    }
-
-    if (sql.includes('count(*) as total from mistakes')) {
-      const [user_id] = params;
-      let total = 0, math = 0, physics = 0, chemistry = 0, chinese = 0, english = 0, politics = 0;
-      for (const m of store.mistakes.values()) {
-        if (m.user_id === user_id) {
-          total++;
-          if (m.subject === 'math') math++;
-          if (m.subject === 'physics') physics++;
-          if (m.subject === 'chemistry') chemistry++;
-          if (m.subject === 'chinese') chinese++;
-          if (m.subject === 'english') english++;
-          if (m.subject === 'politics') politics++;
-        }
-      }
-      return { total, math, physics, chemistry, chinese, english, politics };
-    }
-
-    if (sql.includes('from mistakes where id')) {
-      const [id, user_id] = params;
-      const m = store.mistakes.get(id);
-      if (m && m.user_id === user_id) return m;
-      return undefined;
-    }
-
-    if (sql.includes('from tutor_sessions where id')) {
-      const [id, user_id] = params;
-      const s = store.tutorSessions.get(id);
-      if (s && s.user_id === user_id) return s;
-      return undefined;
-    }
-
-    if (sql.includes('from study_progress where user_id') && sql.includes('and subject') && sql.includes('and topic')) {
-      return undefined; // 简化
-    }
-
-    return undefined;
-  }
-
-  all(...params: any[]): any[] {
-    const sql = this.sql.toLowerCase();
-
-    if (sql.includes('from mistakes') && sql.includes('where user_id')) {
-      const [user_id] = params;
-      const results: Mistake[] = [];
-      for (const m of store.mistakes.values()) {
-        if (m.user_id === user_id) results.push(m);
-      }
-      return results.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    }
-
-    if (sql.includes('from search_history')) {
-      const [user_id] = params;
-      const results: SearchHistory[] = [];
-      for (const h of store.searchHistory.values()) {
-        if (h.user_id === user_id) results.push(h);
-      }
-      return results.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    }
-
-    if (sql.includes('from study_progress')) {
-      const [user_id] = params;
-      const results: StudyProgress[] = [];
-      for (const p of store.studyProgress.values()) {
-        if (p.user_id === user_id) results.push(p);
-      }
-      return results;
-    }
-
-    if (sql.includes('from tutor_messages')) {
-      const [session_id] = params;
-      const results: TutorMessage[] = [];
-      for (const m of store.tutorMessages.values()) {
-        if (m.session_id === session_id) results.push(m);
-      }
-      return results.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    }
-
-    return [];
+    tablesInitialized = true;
+    console.log('Database tables initialized');
+  } catch (error) {
+    console.error('Failed to initialize tables:', error);
+    throw error;
   }
 }
 
-class MemoryDatabase {
-  prepare(sql: string): MemoryStatement {
-    return new MemoryStatement(sql);
+/**
+ * 数据库操作类 - 提供统一的数据库访问接口
+ */
+class Database {
+  private initialized = false;
+
+  async ensureInitialized(): Promise<void> {
+    if (!this.initialized) {
+      await initTables();
+      this.initialized = true;
+    }
   }
 
-  exec(_sql: string): void {
-    // 表创建在内存中自动处理
+  // ============ 用户相关 ============
+
+  async getUserByUsername(username: string): Promise<any> {
+    await this.ensureInitialized();
+    const result = await sql`SELECT * FROM users WHERE username = ${username}`;
+    return result.rows[0];
   }
 
-  pragma(_pragma: string): void {
-    // 忽略
+  async getUserById(id: string): Promise<any> {
+    await this.ensureInitialized();
+    const result = await sql`SELECT * FROM users WHERE id = ${id}`;
+    return result.rows[0];
   }
 
-  close(): void {
-    // 忽略
+  async createUser(id: string, username: string, passwordHash: string): Promise<void> {
+    await this.ensureInitialized();
+    const now = new Date().toISOString();
+    await sql`
+      INSERT INTO users (id, username, password_hash, created_at, updated_at)
+      VALUES (${id}, ${username}, ${passwordHash}, ${now}, ${now})
+    `;
+  }
+
+  // ============ 错题相关 ============
+
+  async getMistakes(userId: string, subject?: string, limit = 20, offset = 0): Promise<any[]> {
+    await this.ensureInitialized();
+    if (subject) {
+      const result = await sql`
+        SELECT * FROM mistakes 
+        WHERE user_id = ${userId} AND subject = ${subject}
+        ORDER BY created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      return result.rows;
+    }
+    const result = await sql`
+      SELECT * FROM mistakes 
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+    return result.rows;
+  }
+
+  async getMistakeById(id: string, userId: string): Promise<any> {
+    await this.ensureInitialized();
+    const result = await sql`SELECT * FROM mistakes WHERE id = ${id} AND user_id = ${userId}`;
+    return result.rows[0];
+  }
+
+  async getMistakesCount(userId: string, subject?: string): Promise<number> {
+    await this.ensureInitialized();
+    if (subject) {
+      const result = await sql`SELECT COUNT(*) as count FROM mistakes WHERE user_id = ${userId} AND subject = ${subject}`;
+      return parseInt(result.rows[0].count);
+    }
+    const result = await sql`SELECT COUNT(*) as count FROM mistakes WHERE user_id = ${userId}`;
+    return parseInt(result.rows[0].count);
+  }
+
+  async getMistakesStats(userId: string): Promise<any> {
+    await this.ensureInitialized();
+    const result = await sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN subject = 'math' THEN 1 END) as math,
+        COUNT(CASE WHEN subject = 'physics' THEN 1 END) as physics,
+        COUNT(CASE WHEN subject = 'chemistry' THEN 1 END) as chemistry,
+        COUNT(CASE WHEN subject = 'chinese' THEN 1 END) as chinese,
+        COUNT(CASE WHEN subject = 'english' THEN 1 END) as english,
+        COUNT(CASE WHEN subject = 'politics' THEN 1 END) as politics
+      FROM mistakes WHERE user_id = ${userId}
+    `;
+    return result.rows[0];
+  }
+
+  async createMistake(id: string, userId: string, subject: string, imageData: string, analysis: string, tags: string): Promise<void> {
+    await this.ensureInitialized();
+    const now = new Date().toISOString();
+    await sql`
+      INSERT INTO mistakes (id, user_id, subject, image_data, analysis, tags, created_at, updated_at)
+      VALUES (${id}, ${userId}, ${subject}, ${imageData}, ${analysis}, ${tags}, ${now}, ${now})
+    `;
+  }
+
+  async deleteMistake(id: string): Promise<void> {
+    await this.ensureInitialized();
+    await sql`DELETE FROM mistakes WHERE id = ${id}`;
+  }
+
+  // ============ 搜索历史 ============
+
+  async getSearchHistory(userId: string, limit = 20): Promise<any[]> {
+    await this.ensureInitialized();
+    const result = await sql`
+      SELECT * FROM search_history 
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+    return result.rows;
+  }
+
+  async createSearchHistory(id: string, userId: string, query: string, subject: string | null): Promise<void> {
+    await this.ensureInitialized();
+    const now = new Date().toISOString();
+    await sql`
+      INSERT INTO search_history (id, user_id, query, subject, created_at)
+      VALUES (${id}, ${userId}, ${query}, ${subject}, ${now})
+    `;
+  }
+
+  async clearSearchHistory(userId: string): Promise<void> {
+    await this.ensureInitialized();
+    await sql`DELETE FROM search_history WHERE user_id = ${userId}`;
+  }
+
+  // ============ 学习进度 ============
+
+  async getStudyProgress(userId: string, subject?: string): Promise<any[]> {
+    await this.ensureInitialized();
+    if (subject) {
+      const result = await sql`
+        SELECT * FROM study_progress 
+        WHERE user_id = ${userId} AND subject = ${subject}
+        ORDER BY mastery_level ASC
+      `;
+      return result.rows;
+    }
+    const result = await sql`
+      SELECT * FROM study_progress 
+      WHERE user_id = ${userId}
+      ORDER BY mastery_level ASC
+    `;
+    return result.rows;
+  }
+
+  async getWeakTopics(userId: string, subject: string, limit = 10): Promise<string[]> {
+    await this.ensureInitialized();
+    const result = await sql`
+      SELECT topic FROM study_progress
+      WHERE user_id = ${userId} AND subject = ${subject} AND mastery_level < 60
+      ORDER BY mastery_level ASC
+      LIMIT ${limit}
+    `;
+    return result.rows.map(r => r.topic);
+  }
+
+  // ============ AI导师会话 ============
+
+  async getTutorSession(sessionId: string, userId: string): Promise<any> {
+    await this.ensureInitialized();
+    const result = await sql`
+      SELECT * FROM tutor_sessions 
+      WHERE id = ${sessionId} AND user_id = ${userId}
+    `;
+    return result.rows[0];
+  }
+
+  async createTutorSession(id: string, userId: string, subject: string, topic: string | null, sessionType: string): Promise<void> {
+    await this.ensureInitialized();
+    const now = new Date().toISOString();
+    await sql`
+      INSERT INTO tutor_sessions (id, user_id, subject, topic, session_type, status, created_at, updated_at)
+      VALUES (${id}, ${userId}, ${subject}, ${topic}, ${sessionType}, 'active', ${now}, ${now})
+    `;
+  }
+
+  async getTutorMessages(sessionId: string, limit = 10): Promise<any[]> {
+    await this.ensureInitialized();
+    const result = await sql`
+      SELECT * FROM tutor_messages 
+      WHERE session_id = ${sessionId}
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+    return result.rows;
+  }
+
+  async createTutorMessage(id: string, sessionId: string, role: string, content: string, messageType: string): Promise<void> {
+    await this.ensureInitialized();
+    const now = new Date().toISOString();
+    await sql`
+      INSERT INTO tutor_messages (id, session_id, role, content, message_type, created_at)
+      VALUES (${id}, ${sessionId}, ${role}, ${content}, ${messageType}, ${now})
+    `;
   }
 }
 
-let db: MemoryDatabase | null = null;
+// 单例数据库实例
+const db = new Database();
 
-export function getDatabase(): MemoryDatabase {
-  if (!db) {
-    db = new MemoryDatabase();
-  }
+/**
+ * 获取数据库实例
+ */
+export function getDatabase(): Database {
   return db;
 }
 
+/**
+ * 生成 UUID
+ */
 export function generateId(): string {
   return uuidv4();
 }
 
+/**
+ * 关闭数据库连接（Vercel Postgres 自动管理）
+ */
 export function closeDatabase(): void {
-  db = null;
+  // Vercel Postgres 连接池自动管理
 }
