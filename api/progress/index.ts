@@ -5,10 +5,16 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from '@vercel/postgres';
+import { Pool } from 'pg';
 import { authenticateRequest } from '../lib/auth';
 import { generateId } from '../lib/db';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
+
+// 创建连接池
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
 /**
  * 高考知识点体系 - 各学科核心考点
@@ -57,6 +63,27 @@ const GAOKAO_TOPICS: Record<string, string[]> = {
     ]
 };
 
+// 确保表存在
+async function ensureTable(): Promise<void> {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS study_progress (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            mastery_level INTEGER DEFAULT 0,
+            times_studied INTEGER DEFAULT 0,
+            times_correct INTEGER DEFAULT 0,
+            times_wrong INTEGER DEFAULT 0,
+            last_studied_at TIMESTAMP,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, subject, topic)
+        )
+    `);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 验证认证
     const auth = authenticateRequest(req);
@@ -64,29 +91,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return sendPredefinedError(res, 'UNAUTHORIZED');
     }
 
+    try {
+        await ensureTable();
+    } catch (e) {
+        console.error('Failed to ensure table:', e);
+    }
+
     if (req.method === 'GET') {
         // 获取学习进度
         try {
             const { subject } = req.query;
 
-            let progress: any[];
+            let result;
             if (subject && typeof subject === 'string') {
-                const result = await sql`
-                    SELECT subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at
-                    FROM study_progress
-                    WHERE user_id = ${auth.userId} AND subject = ${subject}
-                    ORDER BY subject, mastery_level ASC
-                `;
-                progress = result.rows;
+                result = await pool.query(
+                    'SELECT subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at FROM study_progress WHERE user_id = $1 AND subject = $2 ORDER BY subject, mastery_level ASC',
+                    [auth.userId, subject]
+                );
             } else {
-                const result = await sql`
-                    SELECT subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at
-                    FROM study_progress
-                    WHERE user_id = ${auth.userId}
-                    ORDER BY subject, mastery_level ASC
-                `;
-                progress = result.rows;
+                result = await pool.query(
+                    'SELECT subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at FROM study_progress WHERE user_id = $1 ORDER BY subject, mastery_level ASC',
+                    [auth.userId]
+                );
             }
+
+            const progress = result.rows;
 
             // 计算总体统计
             const stats = {
@@ -180,25 +209,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const now = new Date().toISOString();
 
             // 检查是否存在
-            const existingResult = await sql`
-                SELECT id, mastery_level, times_studied FROM study_progress
-                WHERE user_id = ${auth.userId} AND subject = ${subject} AND topic = ${topic}
-            `;
+            const existingResult = await pool.query(
+                'SELECT id, mastery_level, times_studied FROM study_progress WHERE user_id = $1 AND subject = $2 AND topic = $3',
+                [auth.userId, subject, topic]
+            );
             const existing = existingResult.rows[0];
 
             if (existing) {
                 // 更新
                 const newMastery = Math.max(0, Math.min(100, existing.mastery_level + (masteryChange || 0)));
 
-                await sql`
-                    UPDATE study_progress
-                    SET mastery_level = ${newMastery},
-                        times_studied = times_studied + 1,
-                        notes = COALESCE(${notes || null}, notes),
-                        last_studied_at = ${now},
-                        updated_at = ${now}
-                    WHERE id = ${existing.id}
-                `;
+                await pool.query(
+                    'UPDATE study_progress SET mastery_level = $1, times_studied = times_studied + 1, notes = COALESCE($2, notes), last_studied_at = $3, updated_at = $4 WHERE id = $5',
+                    [newMastery, notes || null, now, now, existing.id]
+                );
 
                 return sendSuccess(res, {
                     id: existing.id,
@@ -210,10 +234,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const id = generateId();
                 const initialMastery = Math.max(0, Math.min(100, masteryChange || 10));
 
-                await sql`
-                    INSERT INTO study_progress (id, user_id, subject, topic, mastery_level, times_studied, notes, last_studied_at, created_at, updated_at)
-                    VALUES (${id}, ${auth.userId}, ${subject}, ${topic}, ${initialMastery}, 1, ${notes || ''}, ${now}, ${now}, ${now})
-                `;
+                await pool.query(
+                    'INSERT INTO study_progress (id, user_id, subject, topic, mastery_level, times_studied, notes, last_studied_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9)',
+                    [id, auth.userId, subject, topic, initialMastery, notes || '', now, now, now]
+                );
 
                 return sendSuccess(res, {
                     id,
