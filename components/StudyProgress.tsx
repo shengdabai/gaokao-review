@@ -9,6 +9,7 @@ import {
     Loader2, RefreshCw, BookOpen, AlertCircle
 } from 'lucide-react';
 import * as api from '../services/api';
+import { SUBJECTS } from '../constants/subjects';
 
 interface Props {
     subject?: { id: string; name: string; icon: string };
@@ -21,16 +22,7 @@ export const StudyProgress: React.FC<Props> = ({ subject, onLogout }) => {
     const [error, setError] = useState('');
     const [selectedSubject, setSelectedSubject] = useState<string | null>(subject?.id || null);
 
-    const SUBJECTS = [
-        { id: 'math', name: '数学', icon: '📐' },
-        { id: 'physics', name: '物理', icon: '⚡' },
-        { id: 'chemistry', name: '化学', icon: '🧪' },
-        { id: 'chinese', name: '语文', icon: '📖' },
-        { id: 'english', name: '英语', icon: '🔤' },
-        { id: 'politics', name: '政治', icon: '⚖️' },
-    ];
-
-    const loadProgress = async () => {
+    const loadProgress = React.useCallback(async () => {
         setIsLoading(true);
         setError('');
 
@@ -46,11 +38,11 @@ export const StudyProgress: React.FC<Props> = ({ subject, onLogout }) => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [onLogout]);
 
     useEffect(() => {
         loadProgress();
-    }, []);
+    }, [loadProgress]);
 
     // 计算进度条颜色
     const getMasteryColor = (level: number) => {

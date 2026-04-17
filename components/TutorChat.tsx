@@ -50,6 +50,7 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const modeDropdownRef = useRef<HTMLDivElement>(null);
 
     // 滚动到底部
     const scrollToBottom = () => {
@@ -59,6 +60,20 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // 点击外部关闭模式选择下拉
+    useEffect(() => {
+        if (!showModeSelect) return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (modeDropdownRef.current && !modeDropdownRef.current.contains(e.target as Node)) {
+                setShowModeSelect(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showModeSelect]);
 
     // 切换学科时重置对话
     useEffect(() => {
@@ -183,7 +198,7 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
 
                 <div className="flex items-center gap-2">
                     {/* 模式选择 */}
-                    <div className="relative">
+                    <div className="relative" ref={modeDropdownRef}>
                         <button
                             onClick={() => setShowModeSelect(!showModeSelect)}
                             className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm hover:border-indigo-300 transition-colors"
