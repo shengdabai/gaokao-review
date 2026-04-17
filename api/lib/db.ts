@@ -160,8 +160,17 @@ async function initTables(): Promise<void> {
       )
     `);
 
+    // Create indexes for frequently queried columns
+    await query(`CREATE INDEX IF NOT EXISTS idx_mistakes_user_id ON mistakes (user_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_mistakes_user_subject ON mistakes (user_id, subject)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history (user_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_study_progress_user_id ON study_progress (user_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_study_progress_user_subject ON study_progress (user_id, subject)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_tutor_sessions_user_id ON tutor_sessions (user_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_tutor_messages_session_id ON tutor_messages (session_id)`);
+
     tablesInitialized = true;
-    console.log('Database tables initialized successfully');
+    console.log('Database tables and indexes initialized successfully');
   } catch (error: any) {
     console.error('Failed to initialize tables:', error.message);
     throw error;
@@ -261,9 +270,9 @@ class Database {
     );
   }
 
-  async deleteMistake(id: string): Promise<void> {
+  async deleteMistake(id: string, userId: string): Promise<void> {
     await this.ensureInitialized();
-    await query('DELETE FROM mistakes WHERE id = $1', [id]);
+    await query('DELETE FROM mistakes WHERE id = $1 AND user_id = $2', [id, userId]);
   }
 
   // ============ 搜索历史 ============
@@ -306,6 +315,54 @@ class Database {
       [userId]
     );
     return result.rows;
+  }
+
+  /**
+   * 更新学习进度（Upsert）
+   * 如果记录已存在则更新，不存在则插入
+   * @param userId - 用户 ID
+   * @param subject - 学科 ID
+   * @param topic - 知识点名称
+   * @param masteryChange - 掌握度变化量（可正可负）
+   * @param correct - 是否回答正确（用于统计正确/错误次数）
+   * @param notes - 可选备注
+   */
+  async updateStudyProgress(
+    userId: string,
+    subject: string,
+    topic: string,
+    masteryChange: number = 5,
+    correct?: boolean,
+    notes?: string
+  ): Promise<any> {
+    await this.ensureInitialized();
+    const id = generateId();
+
+    // Use UPSERT (INSERT ... ON CONFLICT ... DO UPDATE)
+    const result = await query(
+      `INSERT INTO study_progress (id, user_id, subject, topic, mastery_level, times_studied, times_correct, times_wrong, last_studied_at, notes, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, GREATEST(0, LEAST(100, $5)), 1, $6, $7, NOW(), COALESCE($8, ''), NOW(), NOW())
+       ON CONFLICT (user_id, subject, topic) DO UPDATE SET
+         mastery_level = GREATEST(0, LEAST(100, study_progress.mastery_level + $5)),
+         times_studied = study_progress.times_studied + 1,
+         times_correct = study_progress.times_correct + $6,
+         times_wrong = study_progress.times_wrong + $7,
+         last_studied_at = NOW(),
+         notes = CASE WHEN $8 IS NOT NULL AND $8 != '' THEN $8 ELSE study_progress.notes END,
+         updated_at = NOW()
+       RETURNING *`,
+      [
+        id,
+        userId,
+        subject,
+        topic,
+        masteryChange,
+        correct === true ? 1 : 0,
+        correct === false ? 1 : 0,
+        notes || ''
+      ]
+    );
+    return result.rows[0];
   }
 
   async getWeakTopics(userId: string, subject: string, limit = 10): Promise<string[]> {

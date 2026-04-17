@@ -1199,19 +1199,28 @@ export const getUnsyncedMistakes = async () => {
 | `GEMINI_API_KEY` | Gemini API 密钥 | 用户提供 | ✅ 已提供 |
 | `GETNOTES_TOKEN` | Get笔记 API Token | 用户提供 | ✅ 已提供 |
 | `NANO_BANANA_KEY` | 不需要，使用 GEMINI_API_KEY | - | ✅ 已解决 (共用 Gemini Key) |
-| `JWT_SECRET` | JWT 签名密钥 | 自动生成 | 🔄 自动 |
-| `DATABASE_PATH` | SQLite 数据库路径 | 配置 | 🔄 自动 |
+| `JWT_SECRET` | JWT 签名密钥 | 必须手动配置，无默认值 | ⚠️ 必须设置 |
+| `GETNOTES_WEBHOOK_URL` | GetNotes Make.com Webhook URL | 环境变量 | ⚠️ 必须设置 |
+| `DATABASE_URL` | PostgreSQL (Neon) 连接字符串 | Vercel集成 | 🔄 自动 |
+
+> **2026-03-26 安全更新说明**:
+> - JWT_SECRET 已移除硬编码回退值，未配置时服务将拒绝启动
+> - GetNotes webhook URL 已从代码中移除，改为环境变量 `GETNOTES_WEBHOOK_URL`
+> - vite.config.ts 已移除客户端 GEMINI_API_KEY 注入，API Key 仅存在于服务端
+> - vercel.json CORS 已从通配符 `*` 改为指定域名
+> - 数据库已添加必要索引 (user_id, subject, session_id)
 
 ### 8.3 API 安全措施
 
 | 措施 | 描述 |
 |------|------|
-| CORS 白名单 | 仅允许指定域名访问 API |
+| CORS 白名单 | 仅允许指定域名访问 API (已修复，不再使用通配符) |
 | Rate Limiting | 限制每 IP 每分钟请求数 (60次/分钟) |
-| JWT 认证 | 所有敏感接口需要有效 Token |
+| JWT 认证 | 所有敏感接口需要有效 Token，无硬编码回退密钥 |
 | 输入验证 | 对所有用户输入进行格式验证 |
 | SQL 注入防护 | 使用参数化查询 |
 | XSS 防护 | 对输出内容进行转义 |
+| API Key 隔离 | Gemini API Key 仅存在于服务端环境变量，不注入客户端包 |
 
 ### 8.4 密码安全
 

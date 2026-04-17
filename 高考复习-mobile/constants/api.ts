@@ -3,7 +3,7 @@
  */
 
 // API 基础 URL - Vercel 部署地址
-export const API_BASE_URL = 'https://gaokao-review.vercel.app/api';
+export const API_BASE_URL = 'https://gaokao-fuxi.vercel.app/api';
 
 // 学科配置
 export const SUBJECTS = [

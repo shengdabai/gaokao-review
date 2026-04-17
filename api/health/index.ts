@@ -44,13 +44,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
         status: 'ok',
         timestamp: new Date().toISOString(),
-        environment: {
-            nodeVersion: process.version,
-            envVarsConfigured: envVars,
-        },
-        database: {
-            status: dbStatus,
-            error: dbError || undefined,
+        services: {
+            database: dbStatus === 'connected' ? 'ok' : 'error',
+            ai: envVars.GEMINI_API_KEY ? 'configured' : 'missing',
+            auth: envVars.JWT_SECRET ? 'configured' : 'missing',
         },
     });
 }

@@ -18,22 +18,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as api from '@/services/api';
 import { router } from 'expo-router';
 import { clearToken } from '@/services/api';
+import { SUBJECTS } from '@/constants/api';
 
 interface Message {
     id: string;
     role: 'user' | 'assistant';
     content: string;
 }
-
-// 学科配置
-const SUBJECTS = [
-    { id: 'math', name: '数学', icon: '📐' },
-    { id: 'physics', name: '物理', icon: '⚡' },
-    { id: 'chemistry', name: '化学', icon: '🧪' },
-    { id: 'chinese', name: '语文', icon: '📖' },
-    { id: 'english', name: '英语', icon: '🔤' },
-    { id: 'politics', name: '政治', icon: '⚖️' },
-];
 
 // 学习模式
 const MODES = [
@@ -66,9 +57,10 @@ export default function TutorScreen() {
 
     // 滚动到底部
     useEffect(() => {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
             scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
+        return () => clearTimeout(timer);
     }, [messages]);
 
     // 切换学科时重置
