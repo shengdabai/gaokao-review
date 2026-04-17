@@ -11,18 +11,14 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { authenticateRequest } from '../lib/auth';
 import { getDatabase, generateId } from '../lib/db';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
+import { handleCors } from '../lib/cors';
+import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES } from '../lib/constants';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GETNOTES_URL = 'https://hook.us2.make.com/628uk9k37rq9v8cffmsw4u2ao7kel6l2';
+const GETNOTES_URL = process.env.GETNOTES_WEBHOOK_URL || '';
 const GETNOTES_TOKEN = process.env.GETNOTES_TOKEN || '';
-const GETNOTES_TOPIC_IDS = ['K0BlyZmn', 'BJ888R8J'];
 const TEXT_MODEL = 'gemini-2.5-flash-preview-05-20';
 const IMAGE_MODEL = 'gemini-2.0-flash-exp';
-
-const SUBJECT_NAMES: Record<string, string> = {
-  math: '数学', physics: '物理', chemistry: '化学',
-  chinese: '语文', english: '英语', politics: '政治',
-};
 
 // ============ 图片分析 ============
 async function handleAnalyze(req: VercelRequest, res: VercelResponse) {
@@ -195,6 +191,10 @@ ${topic ? `【重点分析】${topic}` : ''}
 
 // ============ 主处理函数 ============
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS 处理
+  if (handleCors(req.method, res, 'POST, OPTIONS')) {
+    return;
+  }
   if (req.method !== 'POST') return sendPredefinedError(res, 'METHOD_NOT_ALLOWED');
   if (!GEMINI_API_KEY) return sendPredefinedError(res, 'INTERNAL_ERROR', 'AI 服务未配置');
 

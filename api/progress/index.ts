@@ -8,6 +8,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDatabase, generateId } from '../lib/db';
 import { authenticateRequest } from '../lib/auth';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
+import { handleCors } from '../lib/cors';
 
 /**
  * 高考知识点体系 - 各学科核心考点
@@ -57,6 +58,11 @@ const GAOKAO_TOPICS: Record<string, string[]> = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // CORS 处理
+    if (handleCors(req.method, res, 'GET, POST, OPTIONS')) {
+        return;
+    }
+
     // 验证认证
     const auth = authenticateRequest(req);
     if (!auth) {
@@ -152,20 +158,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'POST') {
-        // 更新学习进度 - 简化实现
+        // 更新学习进度 - 实际写入数据库
         try {
-            const { subject, topic, masteryChange, notes } = req.body;
+            const { subject, topic, masteryChange, correct, notes } = req.body;
 
             if (!subject || !topic) {
                 return sendError(res, 'INVALID_REQUEST', '请指定学科和知识点', 400);
             }
 
-            // 直接返回成功，实际存储由 AI 导师模块处理
-            return sendSuccess(res, {
-                message: '进度已更新',
+            // Validate subject exists
+            if (!GAOKAO_TOPICS[subject]) {
+                return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
+            }
+
+            const change = typeof masteryChange === 'number' ? masteryChange : 5;
+            const updated = await db.updateStudyProgress(
+                auth.userId,
                 subject,
                 topic,
-                masteryChange
+                change,
+                typeof correct === 'boolean' ? correct : undefined,
+                notes
+            );
+
+            return sendSuccess(res, {
+                message: '进度已更新',
+                progress: updated
             });
 
         } catch (error) {

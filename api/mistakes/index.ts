@@ -11,8 +11,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getDatabase, generateId } from '../lib/db';
 import { authenticateRequest } from '../lib/auth';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
-
-const VALID_SUBJECTS = ['math', 'physics', 'chemistry', 'chinese', 'english', 'politics'];
+import { handleCors } from '../lib/cors';
+import { VALID_SUBJECTS, safeJsonParse } from '../lib/constants';
 
 // 获取错题列表
 async function handleGetList(req: VercelRequest, res: VercelResponse, userId: string) {
@@ -34,7 +34,7 @@ async function handleGetList(req: VercelRequest, res: VercelResponse, userId: st
       subject: m.subject,
       imageUrl: m.image_data,
       analysis: m.analysis,
-      tags: JSON.parse(m.tags || '[]'),
+      tags: safeJsonParse<string[]>(m.tags, []),
       createdAt: m.created_at,
       updatedAt: m.updated_at,
       syncStatus: m.sync_status,
@@ -62,7 +62,7 @@ async function handleGetOne(req: VercelRequest, res: VercelResponse, userId: str
     subject: mistake.subject,
     imageUrl: mistake.image_data,
     analysis: mistake.analysis,
-    tags: JSON.parse(mistake.tags || '[]'),
+    tags: safeJsonParse<string[]>(mistake.tags, []),
     createdAt: mistake.created_at,
     updatedAt: mistake.updated_at,
     syncStatus: mistake.sync_status,
@@ -72,7 +72,8 @@ async function handleGetOne(req: VercelRequest, res: VercelResponse, userId: str
 // 添加错题
 async function handleAdd(req: VercelRequest, res: VercelResponse, userId: string) {
   const db = getDatabase();
-  const { subject, imageUrl, analysis, tags = [] } = req.body;
+  const { subject, imageUrl, analysis, tags: rawTags } = req.body;
+  const tags = Array.isArray(rawTags) ? rawTags : [];
 
   if (!subject || !VALID_SUBJECTS.includes(subject)) {
     return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
@@ -97,7 +98,7 @@ async function handleDelete(req: VercelRequest, res: VercelResponse, userId: str
     return sendPredefinedError(res, 'NOT_FOUND', '错题不存在');
   }
 
-  await db.deleteMistake(id);
+  await db.deleteMistake(id, userId);
   return sendSuccess(res, { message: '删除成功', id });
 }
 
@@ -118,7 +119,7 @@ async function handleSync(req: VercelRequest, res: VercelResponse, userId: strin
       subject: m.subject,
       imageUrl: m.image_data,
       analysis: m.analysis,
-      tags: JSON.parse(m.tags || '[]'),
+      tags: safeJsonParse<string[]>(m.tags, []),
       createdAt: m.created_at,
       updatedAt: m.updated_at,
       syncStatus: m.sync_status,
@@ -127,6 +128,11 @@ async function handleSync(req: VercelRequest, res: VercelResponse, userId: strin
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS 处理
+  if (handleCors(req.method, res, 'GET, POST, DELETE, OPTIONS')) {
+    return;
+  }
+
   try {
     const auth = authenticateRequest(req);
     if (!auth) return sendPredefinedError(res, 'UNAUTHORIZED');

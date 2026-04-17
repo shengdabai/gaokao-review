@@ -10,11 +10,12 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { authenticateRequest } from '../lib/auth';
 import { getDatabase, generateId } from '../lib/db';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
+import { handleCors } from '../lib/cors';
+import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES } from '../lib/constants';
 
 // API 配置
-const GETNOTES_URL = 'https://hook.us2.make.com/628uk9k37rq9v8cffmsw4u2ao7kel6l2';
+const GETNOTES_URL = process.env.GETNOTES_WEBHOOK_URL || '';
 const GETNOTES_TOKEN = process.env.GETNOTES_TOKEN || '';
-const GETNOTES_TOPIC_IDS = ['K0BlyZmn', 'BJ888R8J'];
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const TEXT_MODEL = 'gemini-2.5-flash-preview-05-20';
 
@@ -22,11 +23,6 @@ interface SearchBody {
     query: string;
     subject?: string;
 }
-
-const SUBJECT_NAMES: Record<string, string> = {
-    math: '数学', physics: '物理', chemistry: '化学',
-    chinese: '语文', english: '英语', politics: '政治',
-};
 
 // 调用 Get笔记 API
 async function callGetNotesAPI(query: string): Promise<any> {
@@ -178,6 +174,11 @@ async function handleHistory(req: VercelRequest, res: VercelResponse, userId: st
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // CORS 处理
+    if (handleCors(req.method, res, 'GET, POST, DELETE, OPTIONS')) {
+        return;
+    }
+
     try {
         const auth = authenticateRequest(req);
         if (!auth) {

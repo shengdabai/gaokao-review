@@ -7,8 +7,11 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import type { VercelRequest } from '@vercel/node';
 
-// JWT 密钥，从环境变量获取
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-production';
+// JWT 密钥，从环境变量获取（必须配置）
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is not configured. Refusing to start with insecure defaults.');
+}
 const JWT_EXPIRES_IN = '7d'; // Token 有效期 7 天
 const SALT_ROUNDS = 10; // bcrypt 加密轮数
 

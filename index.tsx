@@ -1,23 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { GoogleGenAI } from "@google/genai";
-import { Camera, Upload, Search, BookOpen, Brain, Zap, ChevronRight, GraduationCap, History, Trash2, Bookmark, X, Key, Lock, LogOut, User, MessageCircle, TrendingUp, BarChart3 } from "lucide-react";
+import { Camera, Upload, Search, BookOpen, Brain, Zap, ChevronRight, GraduationCap, History, Trash2, Bookmark, X, Key, Lock, LogOut, User, MessageCircle, TrendingUp, BarChart3, Filter } from "lucide-react";
 import { useAuth } from "./hooks/useAuth";
 import { AuthPage } from "./components/AuthPage";
 import { TutorChat } from "./components/TutorChat";
 import { PredictAnalysis } from "./components/PredictAnalysis";
 import { StudyProgress } from "./components/StudyProgress";
 import * as api from "./services/api";
-
-// Subjects configuration
-const SUBJECTS = [
-  { id: "math", name: "数学", icon: "📐", primary: true, color: "bg-blue-500" },
-  { id: "physics", name: "物理", icon: "⚡", primary: true, color: "bg-indigo-500" },
-  { id: "chemistry", name: "化学", icon: "🧪", primary: true, color: "bg-violet-500" },
-  { id: "chinese", name: "语文", icon: "📖", primary: false, color: "bg-emerald-500" },
-  { id: "english", name: "英语", icon: "🔤", primary: false, color: "bg-teal-500" },
-  { id: "politics", name: "政治", icon: "⚖️", primary: false, color: "bg-red-500" },
-];
+import { SUBJECTS } from "./constants/subjects";
 
 interface ErrorItem {
   id: string;
@@ -54,29 +44,11 @@ const App = () => {
 
   // Error Notebook State
   const [errorNotebook, setErrorNotebook] = useState<ErrorItem[]>([]);
-
-  // 如果未登录，显示认证页面
-  if (!auth.isLoggedIn && !auth.isLoading) {
-    return (
-      <AuthPage
-        onLogin={auth.login}
-        onRegister={auth.register}
-        isLoading={auth.isLoading}
-        error={auth.error}
-      />
-    );
-  }
-
-  // 加载中
-  if (auth.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="loader"></div>
-      </div>
-    );
-  }
+  // Mistakes filter state
+  const [mistakeSubjectFilter, setMistakeSubjectFilter] = useState<string>("all");
 
   // Initialize Data - 从服务器加载数据
+  // NOTE: useEffect must be called before any conditional returns (React Rules of Hooks)
   useEffect(() => {
     const init = async () => {
       if (!auth.isLoggedIn) return;
@@ -125,6 +97,27 @@ const App = () => {
     init();
   }, [auth.isLoggedIn]);
 
+  // 如果未登录，显示认证页面
+  if (!auth.isLoggedIn && !auth.isLoading) {
+    return (
+      <AuthPage
+        onLogin={auth.login}
+        onRegister={auth.register}
+        isLoading={auth.isLoading}
+        error={auth.error}
+      />
+    );
+  }
+
+  // 加载中
+  if (auth.isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="loader"></div>
+      </div>
+    );
+  }
+
   const handleSelectKey = async () => {
     if ((window as any).aistudio) {
       try {
@@ -166,7 +159,7 @@ const App = () => {
 
       const newItem: ErrorItem = {
         id: result.id,
-        subject: activeSubject.name,
+        subject: activeSubject.id,
         image: selectedImage,
         analysis: aiAnalysis,
         tags: aiTags,
@@ -215,14 +208,21 @@ const App = () => {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setSelectedImage(event.target?.result as string);
-        setAiAnalysis(""); // Clear previous analysis
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    // 限制文件大小为 5MB
+    const MAX_SIZE_MB = 5;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      alert(`图片大小不能超过 ${MAX_SIZE_MB}MB，请压缩后重试。`);
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setSelectedImage(event.target?.result as string);
+      setAiAnalysis(""); // Clear previous analysis
+    };
+    reader.readAsDataURL(file);
   };
 
   const analyzeImage = async () => {
@@ -295,12 +295,177 @@ const App = () => {
   };
 
   // --- Render Helpers ---
+
+  /**
+   * 增强版 Markdown 渲染函数
+   * 支持标题、粗体、斜体、行内代码、代码块、有序/无序列表等
+   * @param text - 原始 Markdown 文本
+   * @returns React 元素数组
+   */
   const renderMarkdown = (text: string) => {
-    return text.split('\n').map((line, i) => (
-      <div key={i} className={line.startsWith('#') ? 'font-bold text-lg mt-4 mb-2 text-gray-900' : 'mb-1 text-gray-700'}>
-        {line.replace(/^#+\s/, '')}
-      </div>
-    ));
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let inCodeBlock = false;
+    let codeContent: string[] = [];
+
+    const processInlineMarkdown = (line: string): React.ReactNode[] => {
+      // Process bold, italic, inline code
+      const parts: React.ReactNode[] = [];
+      let remaining = line;
+      let key = 0;
+
+      while (remaining.length > 0) {
+        // Inline code `...`
+        const codeMatch = remaining.match(/^(.*?)`([^`]+)`(.*)/s);
+        // Bold **...**
+        const boldMatch = remaining.match(/^(.*?)\*\*(.+?)\*\*(.*)/s);
+        // Italic *...*
+        const italicMatch = remaining.match(/^(.*?)\*(.+?)\*(.*)/s);
+
+        // Find earliest match
+        let earliest: { type: string; match: RegExpMatchArray } | null = null;
+        if (codeMatch && codeMatch[1] !== undefined) {
+          const idx = codeMatch[1].length;
+          if (!earliest || idx < (earliest.match[1]?.length ?? Infinity)) {
+            earliest = { type: 'code', match: codeMatch };
+          }
+        }
+        if (boldMatch && boldMatch[1] !== undefined) {
+          const idx = boldMatch[1].length;
+          if (!earliest || idx < (earliest.match[1]?.length ?? Infinity)) {
+            earliest = { type: 'bold', match: boldMatch };
+          }
+        }
+        if (italicMatch && italicMatch[1] !== undefined && !boldMatch) {
+          const idx = italicMatch[1].length;
+          if (!earliest || idx < (earliest.match[1]?.length ?? Infinity)) {
+            earliest = { type: 'italic', match: italicMatch };
+          }
+        }
+
+        if (!earliest) {
+          parts.push(<span key={key++}>{remaining}</span>);
+          break;
+        }
+
+        const { type, match } = earliest;
+        if (match[1]) {
+          parts.push(<span key={key++}>{match[1]}</span>);
+        }
+
+        if (type === 'code') {
+          parts.push(
+            <code key={key++} className="bg-gray-100 text-pink-600 px-1.5 py-0.5 rounded text-xs font-mono">
+              {match[2]}
+            </code>
+          );
+        } else if (type === 'bold') {
+          parts.push(<strong key={key++} className="font-bold text-gray-900">{match[2]}</strong>);
+        } else if (type === 'italic') {
+          parts.push(<em key={key++} className="italic">{match[2]}</em>);
+        }
+
+        remaining = match[3] || '';
+      }
+
+      return parts;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Code block toggle
+      if (line.trim().startsWith('```')) {
+        if (inCodeBlock) {
+          // End code block
+          elements.push(
+            <pre key={i} className="bg-gray-900 text-green-400 p-3 rounded-lg my-2 overflow-x-auto text-xs font-mono">
+              <code>{codeContent.join('\n')}</code>
+            </pre>
+          );
+          codeContent = [];
+          inCodeBlock = false;
+        } else {
+          inCodeBlock = true;
+        }
+        continue;
+      }
+
+      if (inCodeBlock) {
+        codeContent.push(line);
+        continue;
+      }
+
+      // Headings (### > ## > #)
+      if (line.startsWith('### ')) {
+        elements.push(
+          <h4 key={i} className="font-bold text-base mt-3 mb-1.5 text-gray-800">
+            {processInlineMarkdown(line.replace(/^###\s/, ''))}
+          </h4>
+        );
+      } else if (line.startsWith('## ')) {
+        elements.push(
+          <h3 key={i} className="font-bold text-lg mt-4 mb-2 text-gray-900">
+            {processInlineMarkdown(line.replace(/^##\s/, ''))}
+          </h3>
+        );
+      } else if (line.startsWith('# ')) {
+        elements.push(
+          <h2 key={i} className="font-extrabold text-xl mt-4 mb-2 text-gray-900">
+            {processInlineMarkdown(line.replace(/^#\s/, ''))}
+          </h2>
+        );
+      }
+      // Unordered list items
+      else if (line.match(/^\s*[-*]\s/)) {
+        const indent = line.match(/^(\s*)/)?.[1]?.length || 0;
+        elements.push(
+          <div key={i} className="flex items-start gap-2 mb-0.5 text-gray-700" style={{ paddingLeft: `${Math.min(indent, 6) * 8}px` }}>
+            <span className="text-blue-400 mt-1 flex-shrink-0">•</span>
+            <span>{processInlineMarkdown(line.replace(/^\s*[-*]\s/, ''))}</span>
+          </div>
+        );
+      }
+      // Ordered list items
+      else if (line.match(/^\s*\d+\.\s/)) {
+        const numMatch = line.match(/^\s*(\d+)\.\s(.*)/);
+        if (numMatch) {
+          elements.push(
+            <div key={i} className="flex items-start gap-2 mb-0.5 text-gray-700">
+              <span className="text-blue-500 font-bold flex-shrink-0 min-w-[1.2rem] text-right">{numMatch[1]}.</span>
+              <span>{processInlineMarkdown(numMatch[2])}</span>
+            </div>
+          );
+        }
+      }
+      // Horizontal rule
+      else if (line.match(/^[-*_]{3,}\s*$/)) {
+        elements.push(<hr key={i} className="my-3 border-gray-200" />);
+      }
+      // Empty line
+      else if (line.trim() === '') {
+        elements.push(<div key={i} className="h-2" />);
+      }
+      // Normal paragraph
+      else {
+        elements.push(
+          <div key={i} className="mb-1 text-gray-700 leading-relaxed">
+            {processInlineMarkdown(line)}
+          </div>
+        );
+      }
+    }
+
+    // Handle unclosed code block
+    if (inCodeBlock && codeContent.length > 0) {
+      elements.push(
+        <pre key="unclosed-code" className="bg-gray-900 text-green-400 p-3 rounded-lg my-2 overflow-x-auto text-xs font-mono">
+          <code>{codeContent.join('\n')}</code>
+        </pre>
+      );
+    }
+
+    return elements;
   };
 
   const renderNoteResults = () => {
@@ -692,43 +857,96 @@ const App = () => {
               </div>
             )}
 
-            {/* Mistakes Tab Content */}
+            {/* Mistakes Tab Content - 错题本，含学科筛选和知识点标签 */}
             {activeTab === "mistakes" && (
               <div className="space-y-6">
+                {/* Subject filter bar */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Filter className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <button
+                    onClick={() => setMistakeSubjectFilter("all")}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      mistakeSubjectFilter === "all"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    全部
+                  </button>
+                  {SUBJECTS.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setMistakeSubjectFilter(s.id)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        mistakeSubjectFilter === s.id
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+
                 {errorNotebook.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <Bookmark className="w-12 h-12 mx-auto mb-3 text-gray-200" />
                     <p>还没有错题记录哦</p>
-                    <p className="text-xs mt-1">快去“AI 拍题”里添加吧！</p>
+                    <p className="text-xs mt-1">快去"AI 拍题"里添加吧！</p>
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {errorNotebook.map((item) => (
-                      <div key={item.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                        <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded font-bold">
-                              {item.subject}
-                            </span>
-                            <span className="text-xs text-gray-400">{item.date}</span>
+                    {(() => {
+                      const filtered = errorNotebook.filter(
+                        (item) => mistakeSubjectFilter === "all" || item.subject === mistakeSubjectFilter
+                      );
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="text-center py-8 text-gray-400">
+                            <p>该学科暂无错题记录</p>
                           </div>
-                          <button
-                            onClick={() => removeFromNotebook(item.id)}
-                            className="text-gray-400 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        );
+                      }
+                      return filtered.map((item) => (
+                        <div key={item.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded font-bold">
+                                {SUBJECTS.find(s => s.id === item.subject)?.name || item.subject}
+                              </span>
+                              <span className="text-xs text-gray-400">{item.date}</span>
+                            </div>
+                            <button
+                              onClick={() => removeFromNotebook(item.id)}
+                              className="text-gray-400 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="p-4">
+                            <div className="mb-4 bg-gray-50 rounded-lg p-2 inline-block">
+                              <img src={item.image} alt="Question" className="max-h-32 rounded object-contain" />
+                            </div>
+                            <div className="text-sm text-gray-700 bg-white p-3 rounded border border-gray-100">
+                              {renderMarkdown(item.analysis)}
+                            </div>
+                            {/* Display knowledge point tags */}
+                            {item.tags && item.tags.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {item.tags.map((tag, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center bg-indigo-50 text-indigo-600 text-xs px-2 py-0.5 rounded-full"
+                                  >
+                                    #{tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="p-4">
-                          <div className="mb-4 bg-gray-50 rounded-lg p-2 inline-block">
-                            <img src={item.image} alt="Question" className="max-h-32 rounded object-contain" />
-                          </div>
-                          <div className="text-sm text-gray-700 bg-white p-3 rounded border border-gray-100">
-                            {renderMarkdown(item.analysis)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 )}
               </div>
@@ -738,7 +956,7 @@ const App = () => {
         </div>
 
         <div className="text-center text-gray-400 text-xs py-4">
-          © 2024 高考冲刺助手 · Powered by Gemini Nano & Get Notes
+          © 2024 高考冲刺助手 · Powered by Gemini & Get Notes
         </div>
       </main>
     </div>

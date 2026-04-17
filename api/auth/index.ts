@@ -16,6 +16,7 @@ import {
     isValidPassword
 } from '../lib/auth';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
+import { handleCors } from '../lib/cors';
 
 interface LoginBody {
     username: string;
@@ -118,6 +119,11 @@ async function handleGetMe(req: VercelRequest, res: VercelResponse) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // CORS 处理
+    if (handleCors(req.method, res, 'GET, POST, OPTIONS')) {
+        return;
+    }
+
     try {
         const action = req.query.action as string;
 
@@ -140,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             stack: error?.stack,
             name: error?.name,
         });
-        // 确保返回 JSON 格式的错误
-        return sendError(res, 'INTERNAL_ERROR', error?.message || '服务器内部错误', 500);
+        // 确保返回 JSON 格式的错误，不泄露内部细节
+        return sendError(res, 'INTERNAL_ERROR', '服务器内部错误', 500);
     }
 }
