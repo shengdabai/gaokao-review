@@ -16,6 +16,9 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # 数据库文件
 data/
@@ -40,18 +43,13 @@ data/
 
 # OMC internal state
 .omc/
-# Codex governance: local secrets and machine state
-.env
-.env.*
-!.env.example
-!.env.*.example
+.codex/
+.claude/local/
+
+# Credentials & secrets
 *.pem
 *.p12
 *.pfx
 id_rsa
 id_dsa
 .npmrc
-.DS_Store
-.omc/
-.codex/
-.claude/local/
