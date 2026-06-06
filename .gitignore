@@ -37,3 +37,6 @@ data/
 
 # Vercel
 .vercel
+
+# OMC internal state
+.omc/
