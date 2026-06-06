@@ -1,352 +1,149 @@
-# Gaokao Review - AI-Powered Exam Preparation Platform
+# 📚 高考冲刺智能复习助手 🎓
 
-> An AI-powered exam preparation system integrating Socratic teaching methods and analysis of past exam papers
+> 用 AI 把"刷题"变成"会学"——苏格拉底式 AI 导师 + 历年真题考点分析 + 拍照解题，一个网页端到手机端的高考复习系统。
 
-# 高考冲刺智能复习助手 🎓
+<p>
+  <img alt="最近提交" src="https://img.shields.io/github/last-commit/shengdabai/gaokao-review">
+  <img alt="Star 数" src="https://img.shields.io/github/stars/shengdabai/gaokao-review?style=social">
+  <img alt="关注作者" src="https://img.shields.io/github/followers/shengdabai?style=social">
+</p>
 
-> 基于 AI 的高考智能复习系统，融合苏格拉底式教学法和历年真题分析
+部署地址：<https://gaokao-fuxi.vercel.app>（生产环境域名，访问可用性以实际部署状态为准）
 
 ---
 
-## Features
+## 为什么做这个
 
-| Feature | Description | Status |
-|--------|-------------|---------|
-| 🎓 **AI Tutor** | Socratic teaching, personalized guidance | ✅ Complete |
-| 📊 **Question Analysis** | Analysis of exam trends based on past papers | ✅ Complete |
-| 🎯 **Topic Prediction** | AI predicts key focus areas for this year | ✅ Complete |
-| 📈 **Study Progress** | Track knowledge mastery progress | ✅ Complete |
-| 📷 **AI Photo Solver** | Upload photos, AI solves and explains | ✅ Complete |
-| 📚 **Notes Search** | Connect to GetNotes knowledge base | ✅ Complete |
-| 📝 **Mistake Notebook** | Save analyzed questions | ✅ Complete |
+市面上的题库 App 大多在"喂题"，而不是"教会"。这个项目反过来——AI 不直接给答案，而是先问你哪里卡住、引导你自己想明白，再用历年真题告诉你哪些考点真正高频、今年可能考什么。它是一名自由职业中文培训师（6000+ 学员）在一线教学中沉淀出来的复习思路，用 AI 工程化落地的成果。
 
-## ✨ 核心功能
+## 做什么
 
-| 功能 | 描述 | 状态 |
-|------|------|------|
-| 🎓 **AI 导师** | 苏格拉底式教学，个性化辅导 | ✅ 完成 |
-| 📊 **试题分析** | 基于历年真题分析考点趋势 | ✅ 完成 |
-| 🎯 **考点预测** | AI 预测今年可能的重点 | ✅ 完成 |
-| 📈 **学习进度** | 跟踪知识点掌握程度 | ✅ 完成 |
-| 📷 **AI 拍题** | 拍照上传，AI 解答讲解 | ✅ 完成 |
-| 📚 **笔记搜索** | 连接 Get笔记知识库 | ✅ 完成 |
-| 📝 **错题本** | 保存分析过的题目 | ✅ 完成 |
+- **不替你做题，而是带你学会**：AI 导师采用苏格拉底式对话，先问后教、循序渐进、随时验证理解。
+- **基于真题，而非凭空预测**：考点分析与重点预测都建立在历年高考真题之上，不是拍脑袋。
+- **拍照即问**：题目不会做，拍张照上传，AI 解答并讲解思路。
+- **网页 + 手机双端**：浏览器即开即用，也可打包成安卓 App 揣进口袋。
 
-## 🚀 Getting Started
+## ✨ 功能特性
 
-### Prerequisites
-- Node.js 20.x
-- npm or yarn
-- Vercel account (for deployment)
-- Google API Key with billing enabled (for AI features)
+| 功能 | 说明 |
+|------|------|
+| 🎓 AI 导师 | 苏格拉底式对话教学，先问后教、个性化引导，不直接给答案 |
+| 📊 试题分析 | 基于历年真题分析考点分布与命题趋势 |
+| 🎯 考点预测 | AI 结合真题数据预测今年可能的重点方向 |
+| 📷 AI 拍题 | 拍照上传，AI 解答并逐步讲解 |
+| 📝 错题本 | 保存分析过的题目，沉淀个人薄弱点 |
+| 📚 笔记搜索 | 接入 Get 笔记知识库，检索已导入的真题与笔记 |
+| 📈 学习进度 | 跟踪各学科知识点掌握程度 |
+| 🔐 用户系统 | 注册登录、JWT 鉴权，进度与错题跨设备保留 |
 
-### Installation
+### 学科覆盖
 
-1. Clone the repository
-```bash
-git clone https://github.com/shengdabai/gaokao-review.git
-cd gaokao-review
-```
+| 学科 | 知识点数 | 重点方向 |
+|------|---------|---------|
+| 📐 数学 | 33 | 函数、导数、圆锥曲线 |
+| ⚡ 物理 | 20 | 力学、电磁学 |
+| 🧪 化学 | 20 | 反应原理、有机化学 |
+| 📖 语文 | 12 | 阅读、作文、文言文 |
+| 🔤 英语 | 14 | 语法、阅读、写作 |
+| ⚖️ 政治 | 13 | 哲学、经济、政治生活 |
 
-2. Install dependencies
-```bash
-npm install
-```
+## 🧱 技术栈
 
-3. Set up environment variables
-```bash
-# Create .env.local file
-echo "GEMINI_API_KEY=your_api_key" > .env.local
-echo "GETNOTES_TOKEN=your_token" >> .env.local
-echo "JWT_SECRET=your_random_secret" >> .env.local
-```
-
-4. Run development server
-```bash
-# Frontend only
-npm run dev
-
-# With Vercel CLI (includes API)
-vercel dev
-```
-
-5. Deploy to production
-```bash
-vercel --prod
-```
+- **前端**：React 19 + TypeScript + Vite + Tailwind CSS + Lucide 图标
+- **后端**：Vercel Serverless Functions（Node.js 20.x）
+- **数据库**：PostgreSQL（Vercel Postgres / Neon，基于 `pg`）
+- **鉴权**：JWT + bcryptjs 密码哈希
+- **AI**：Google Gemini（`@google/genai` / `@google/generative-ai`），用于图片识题与自然语言教学
+- **知识库**：Get 笔记 API
+- **移动端**：React Native + Expo
 
 ## 🚀 快速开始
 
-### 1. 安装依赖
+### 环境要求
+
+- Node.js 20.x
+- npm
+- Vercel 账号（部署用）
+- 开通计费的 Google Gemini API Key（AI 功能用）
+
+### 1. 克隆与安装
 
 ```bash
+git clone https://github.com/shengdabai/gaokao-review.git
+cd gaokao-review
 npm install
 ```
 
 ### 2. 配置环境变量
 
-创建 `.env.local` 文件：
+在项目根目录创建 `.env.local`（占位符请替换为你自己的值，切勿提交真实密钥）：
 
 ```bash
-# Gemini API Key
-GEMINI_API_KEY=你的API密钥
-
-# Get笔记 API Token
-GETNOTES_TOKEN=你的Token
-
-# JWT 签名密钥
-JWT_SECRET=随机生成的密钥
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+GETNOTES_TOKEN=YOUR_GETNOTES_TOKEN
+JWT_SECRET=YOUR_RANDOM_SECRET
+POSTGRES_URL=YOUR_POSTGRES_CONNECTION_URL
 ```
 
 ### 3. 启动开发服务器
 
 ```bash
-# 前端开发
+# 仅前端
 npm run dev
 
-# 使用 Vercel CLI 启动（包含 API）
-vercel dev
+# 含 API（需 Vercel CLI）
+npm run api:dev
 ```
 
-### 4. 部署到 Vercel
+### 4. 初始化数据库
+
+```bash
+npm run db:init
+```
+
+### 5. 部署到生产环境
 
 ```bash
 vercel --prod
 ```
 
-## 📱 Mobile App
-
-```bash
-cd gaokao-review-mobile
-npm install
-
-# Development mode
-npx expo start
-
-# Build APK
-eas build --platform android --profile preview
-```
-
-## 📱 安卓应用
+### 移动端（可选）
 
 ```bash
 cd 高考复习-mobile
 npm install
-
-# 开发模式
-npx expo start
-
-# 构建 APK
-eas build --platform android --profile preview
+npx expo start                                   # 开发模式
+eas build --platform android --profile preview   # 构建安卓 APK
 ```
 
-## 📖 Usage Guide
+## 📖 使用说明
 
-### Importing Gaokao Past Papers
+1. **导入真题**：把历年高考试卷 PDF 导入 Get 笔记知识库，AI 分析即以此为依据（详见 `docs/` 内的导入说明）。
+2. **AI 导师**：选学科与模式（学习 / 复习 / 测验）→ 输入想学的知识点 → 对话学习，系统自动记录进度。
+3. **试题分析**：选学科（可指定具体知识点）→ AI 基于真题给出高频考点、命题趋势与预测重点。
+4. **拍题**：拍照上传不会的题，AI 解答并讲解。
+5. **错题本**：把分析过的题一键保存，长期沉淀薄弱环节。
 
-Import PDF files of past Gaokao papers from iCloud to GetNotes knowledge base. See [PDF Import Guide](./docs/PDF导入指南.md) for details.
+## 🗺️ 项目状态
 
-### AI Tutor Usage
+个人实验性项目，由一线教学需求驱动，仍在持续迭代中。核心功能（AI 导师、试题分析、拍题、错题本、进度跟踪、用户系统）已实现并部署；AI 输出质量依赖所配置的 Gemini Key 与导入的真题数据，使用体验会随知识库完善而提升。欢迎试用、提 Issue、给建议。
 
-1. Select subject and learning mode (Study/Review/Quiz)
-2. Enter the topic you want to learn
-3. Start conversation - AI will use Socratic method to guide your learning
-4. System automatically records learning progress
+## 🤝 关于与连接
 
-### Question Analysis
+作者 **Tony（盛）** 是一名自由职业中文培训师，累计教过 6000+ 学员，专注用 AI 打造中文教学与备考工具——把课堂里反复验证有效的方法，做成人人可用的产品。
 
-1. Select subject for analysis
-2. Optionally specify particular knowledge points
-3. AI analyzes based on past papers in knowledge base
-4. Get high-frequency topics, question trends, and predicted focus areas
+如果这个项目对你有帮助，欢迎 **⭐ Star** 一下，也欢迎关注 [@shengdabai](https://github.com/shengdabai) 看后续更新。
 
-## 📖 使用指南
+相关项目：
 
-### 导入高考真题
-
-将 iCloud 中的高考试卷 PDF 导入 Get笔记知识库，详见 [PDF导入指南](./docs/PDF导入指南.md)
-
-### AI 导师使用
-
-1. 选择学科和学习模式（学习/复习/测验）
-2. 输入想学习的知识点
-3. 开始对话，AI 会采用苏格拉底式教学引导你学习
-4. 系统自动记录学习进度
-
-### 试题分析
-
-1. 选择要分析的学科
-2. 可选指定具体知识点
-3. AI 基于知识库中的历年真题进行分析
-4. 获得高频考点、命题趋势、预测重点
-
-## 🛠️ Tech Stack
-
-### Frontend
-- **React 19.2.1** - UI library with modern features
-- **TypeScript** - Type-safe development
-- **Vite** - Fast build tool and development server
-- **Tailwind CSS** - Utility-first CSS framework
-- **Lucide React** - Beautiful icon library
-
-### Backend
-- **Vercel** - Serverless platform deployment
-- **Node.js 20.x** - Runtime environment
-- **PostgreSQL** - Database for user data and content
-- **JWT** - Authentication and authorization
-- **bcryptjs** - Password hashing
-
-### AI/ML
-- **Google Gemini AI** - Advanced AI models for image analysis and natural language processing
-- **Google Generative AI** - Content generation and analysis
-
-## 🛠️ 技术栈
-
-- **前端**: React 19 + Vite + Tailwind CSS
-- **后端**: Vercel Serverless Functions
-- **数据库**: SQLite
-- **AI**: Gemini API
-- **知识库**: Get笔记 API
-- **移动端**: React Native + Expo
-
-## 📁 Project Structure
-
-```
-gaokao-review/
-├── src/
-│   ├── components/          # React components
-│   │   ├── AuthPage.tsx    # Authentication page
-│   │   ├── TutorChat.tsx   # AI chat interface
-│   │   ├── PredictAnalysis.tsx # Performance analysis
-│   │   ├── StudyProgress.tsx # Progress tracking
-│   │   └── ...
-│   ├── hooks/              # Custom React hooks
-│   │   └── useAuth.ts      # Authentication hook
-│   ├── services/           # API services
-│   │   └── api.ts          # API client
-│   ├── constants/          # Constants and configuration
-│   │   └── subjects.ts     # Subject definitions
-│   └── api/                # Backend API routes
-│       ├── auth/           # Authentication endpoints
-│       ├── ai/             # AI analysis endpoints
-│       ├── notes/          # Notes search endpoints
-│       ├── mistakes/       # Mistake tracking endpoints
-│       └── progress/       # Progress tracking endpoints
-├── public/                 # Static assets
-├── scripts/                # Build and utility scripts
-└── dist/                   # Build output
-```
-
-## 📁 项目结构
-
-```
-高考复习/
-├── api/                    # Serverless API
-│   ├── ai/                 # AI 相关 API
-│   │   ├── tutor.ts        # AI 导师（苏格拉底式教学）
-│   │   ├── predict.ts      # 试题分析预测
-│   │   ├── analyze.ts      # 图片分析
-│   │   └── ask.ts          # 文本问答
-│   ├── auth/               # 用户认证
-│   ├── notes/              # 笔记搜索
-│   ├── mistakes/           # 错题本
-│   ├── progress/           # 学习进度
-│   └── lib/                # 工具库
-├── components/             # React 组件
-│   ├── TutorChat.tsx       # AI 导师聊天
-│   ├── PredictAnalysis.tsx # 试题分析
-│   ├── StudyProgress.tsx   # 学习进度
-│   └── AuthPage.tsx        # 登录注册
-├── services/               # API 服务
-├── hooks/                  # React Hooks
-├── docs/                   # 文档
-└── 高考复习-mobile/         # 移动端应用
-```
-
-## 🎓 Learning Methodology
-
-This project adopts the Socratic teaching methodology from [CFP-Study](https://github.com/chenran818/CFP-Study):
-
-1. **Ask before teaching** - Understand what students already know
-2. **Progressive learning** - Build on existing knowledge step by step
-3. **Verify understanding** - Ask questions after each explanation
-4. **Personalized adaptation** - Adjust teaching style based on responses
-5. **Progress tracking** - Automatically record learning progress
-
-## 🎓 学习方法
-
-本项目采用 [CFP-Study](https://github.com/chenran818/CFP-Study) 的苏格拉底式教学理念：
-
-1. **先问后教** - 先了解学生已知内容
-2. **循序渐进** - 基于已有知识逐步深入
-3. **验证理解** - 每次讲解后提问验证
-4. **个性适配** - 根据回答调整教学风格
-5. **追踪进度** - 自动记录学习情况
-
-## 📊 Subject Coverage
-
-| Subject | Topics | Description |
-|---------|--------|-------------|
-| 📐 Math | 33 | Focus: Functions, Calculus, Conic Sections |
-| ⚡ Physics | 20 | Focus: Mechanics, Electromagnetism |
-| 🧪 Chemistry | 20 | Focus: Reaction Principles, Organic Chemistry |
-| 📖 Chinese | 12 | Reading, Composition, Classical Chinese |
-| 🔤 English | 14 | Grammar, Reading, Writing |
-| ⚖️ Politics | 13 | Philosophy, Economics, Political Life |
-
-## 📊 学科覆盖
-
-| 学科 | 知识点数 | 描述 |
-|------|---------|------|
-| 📐 数学 | 33 | 重点：函数、导数、圆锥曲线 |
-| ⚡ 物理 | 20 | 重点：力学、电磁学 |
-| 🧪 化学 | 20 | 重点：反应原理、有机化学 |
-| 📖 语文 | 12 | 阅读、作文、文言文 |
-| 🔤 英语 | 14 | 语法、阅读、写作 |
-| ⚖️ 政治 | 13 | 哲学、经济、政治生活 |
-
-## 📝 Changelog
-
-### v2.0.0 (2024-12)
-- ✨ Added AI Tutor (Socratic teaching method)
-- ✨ Added question analysis and prediction features
-- ✨ Added study progress tracking
-- 🔧 Optimized mobile experience
-
-### v1.0.0
-- 🎉 Initial release
-- ✅ AI photo-based question solving
-- ✅ GetNotes search integration
-- ✅ Mistake notebook functionality
-
-## 📄 License
-
-MIT License
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- [gaokao-600](https://github.com/shengdabai/gaokao-600) — 高考相关复习项目
+- [gaokao-study-materials](https://github.com/shengdabai/gaokao-study-materials) — 高考备考学习资料
+- [college-major-selector](https://github.com/shengdabai/college-major-selector) — 高考志愿 / 专业选择辅助工具
 
 ## 📄 许可证
 
-MIT License
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+暂无开源协议。
 
 ---
 
 **高考加油！** 🎯
-# Deploy Fri Dec 26 14:00:53 CST 2025
-# Deploy Fri Dec 26 14:00:53 CST 2025
