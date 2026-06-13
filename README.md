@@ -1,149 +1,86 @@
-# 📚 高考冲刺智能复习助手 🎓
+# gaokao-review
 
-> 用 AI 把"刷题"变成"会学"——苏格拉底式 AI 导师 + 历年真题考点分析 + 拍照解题，一个网页端到手机端的高考复习系统。
+AI 高考智能复习助手:苏格拉底式 AI 导师 + 历年真题考点分析 + 拍照解题,网页与安卓双端。React + TypeScript + Gemini + Vercel。
 
-<p>
-  <img alt="最近提交" src="https://img.shields.io/github/last-commit/shengdabai/gaokao-review">
-  <img alt="Star 数" src="https://img.shields.io/github/stars/shengdabai/gaokao-review?style=social">
-  <img alt="关注作者" src="https://img.shields.io/github/followers/shengdabai?style=social">
-</p>
+## Business Context
 
-部署地址：<https://gaokao-fuxi.vercel.app>（生产环境域名，访问可用性以实际部署状态为准）
+- **Category:** AI workflow infrastructure
+- **Audience:** AI builders, creators, independent developers, and small teams that want repeatable local AI workflows.
+- **Repository status:** Public repository. Keep examples, docs, and issues free of credentials, private data, and machine-specific paths.
+- **Topics:** ai, education, exam-prep, gaokao, gemini, react, socratic-method, typescript, vercel, vite
 
----
+## What This Project Is For
 
-## 为什么做这个
+- AI 高考智能复习助手:苏格拉底式 AI 导师 + 历年真题考点分析 + 拍照解题,网页与安卓双端。React + TypeScript + Gemini + Vercel。.
+- Package repeatable AI workflows into reusable local assets.
+- Reduce one-off prompt work by keeping skills, guardrails, and handoff files versioned.
 
-市面上的题库 App 大多在"喂题"，而不是"教会"。这个项目反过来——AI 不直接给答案，而是先问你哪里卡住、引导你自己想明白，再用历年真题告诉你哪些考点真正高频、今年可能考什么。它是一名自由职业中文培训师（6000+ 学员）在一线教学中沉淀出来的复习思路，用 AI 工程化落地的成果。
+## Where It Fits
 
-## 做什么
+This repository is part of a broader AI local-workbench operating model: reusable skills, local automation, auditable configuration, and repeatable delivery workflows.
 
-- **不替你做题，而是带你学会**：AI 导师采用苏格拉底式对话，先问后教、循序渐进、随时验证理解。
-- **基于真题，而非凭空预测**：考点分析与重点预测都建立在历年高考真题之上，不是拍脑袋。
-- **拍照即问**：题目不会做，拍张照上传，AI 解答并讲解思路。
-- **网页 + 手机双端**：浏览器即开即用，也可打包成安卓 App 揣进口袋。
+## Technical Overview
 
-## ✨ 功能特性
+- **Primary language:** TypeScript
+- **Detected stack:** TypeScript, Node.js / JavaScript tooling, Vercel, Vite, React
+- **Default branch:** `main`
+- **Visibility:** `PUBLIC`
+- **License:** MIT License
 
-| 功能 | 说明 |
-|------|------|
-| 🎓 AI 导师 | 苏格拉底式对话教学，先问后教、个性化引导，不直接给答案 |
-| 📊 试题分析 | 基于历年真题分析考点分布与命题趋势 |
-| 🎯 考点预测 | AI 结合真题数据预测今年可能的重点方向 |
-| 📷 AI 拍题 | 拍照上传，AI 解答并逐步讲解 |
-| 📝 错题本 | 保存分析过的题目，沉淀个人薄弱点 |
-| 📚 笔记搜索 | 接入 Get 笔记知识库，检索已导入的真题与笔记 |
-| 📈 学习进度 | 跟踪各学科知识点掌握程度 |
-| 🔐 用户系统 | 注册登录、JWT 鉴权，进度与错题跨设备保留 |
+## Repository Map
 
-### 学科覆盖
+- `LICENSE`
+- `QUICK_START.md`
+- `README.md`
+- `SECURITY.md`
+- `api`
+- `codex高考复习技术文档.md`
+- `components`
+- `constants`
+- `docs`
+- `scripts`
 
-| 学科 | 知识点数 | 重点方向 |
-|------|---------|---------|
-| 📐 数学 | 33 | 函数、导数、圆锥曲线 |
-| ⚡ 物理 | 20 | 力学、电磁学 |
-| 🧪 化学 | 20 | 反应原理、有机化学 |
-| 📖 语文 | 12 | 阅读、作文、文言文 |
-| 🔤 英语 | 14 | 语法、阅读、写作 |
-| ⚖️ 政治 | 13 | 哲学、经济、政治生活 |
+## Quick Start
 
-## 🧱 技术栈
-
-- **前端**：React 19 + TypeScript + Vite + Tailwind CSS + Lucide 图标
-- **后端**：Vercel Serverless Functions（Node.js 20.x）
-- **数据库**：PostgreSQL（Vercel Postgres / Neon，基于 `pg`）
-- **鉴权**：JWT + bcryptjs 密码哈希
-- **AI**：Google Gemini（`@google/genai` / `@google/generative-ai`），用于图片识题与自然语言教学
-- **知识库**：Get 笔记 API
-- **移动端**：React Native + Expo
-
-## 🚀 快速开始
-
-### 环境要求
-
-- Node.js 20.x
-- npm
-- Vercel 账号（部署用）
-- 开通计费的 Google Gemini API Key（AI 功能用）
-
-### 1. 克隆与安装
+Use the commands that match the current project state:
 
 ```bash
-git clone https://github.com/shengdabai/gaokao-review.git
-cd gaokao-review
 npm install
-```
-
-### 2. 配置环境变量
-
-在项目根目录创建 `.env.local`（占位符请替换为你自己的值，切勿提交真实密钥）：
-
-```bash
-GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-GETNOTES_TOKEN=YOUR_GETNOTES_TOKEN
-JWT_SECRET=YOUR_RANDOM_SECRET
-POSTGRES_URL=YOUR_POSTGRES_CONNECTION_URL
-```
-
-### 3. 启动开发服务器
-
-```bash
-# 仅前端
 npm run dev
-
-# 含 API（需 Vercel CLI）
-npm run api:dev
+npm start
+npm run build
+npm run lint
 ```
 
-### 4. 初始化数据库
+| Command | Purpose |
+|---|---|
+| `npm run dev` | vite |
+| `npm start` | expo start |
+| `npm run build` | vite build |
+| `npm run lint` | eslint . |
 
-```bash
-npm run db:init
-```
+## Operating Notes
 
-### 5. 部署到生产环境
+- Keep real credentials out of the repository. Use local environment files, GitHub repository secrets, or the deployment platform secret manager.
+- If a `.env.example` file exists, treat it as documentation only; never commit filled-in `.env` files.
+- Before publishing screenshots, demos, or client examples, remove private names, internal paths, account IDs, and API endpoints.
+- The `Repository Hygiene` workflow is intended as a lightweight guardrail, not a replacement for product-specific tests.
 
-```bash
-vercel --prod
-```
+## Delivery Checklist
 
-### 移动端（可选）
+- [ ] README describes the user, business outcome, and operating boundary.
+- [ ] Setup or preview commands are current.
+- [ ] No real secrets, private user data, or machine-local state are tracked.
+- [ ] Screenshots, demos, or sample outputs are safe to share publicly when the repository is public.
+- [ ] Product-specific tests or smoke checks are documented before production use.
 
-```bash
-cd 高考复习-mobile
-npm install
-npx expo start                                   # 开发模式
-eas build --platform android --profile preview   # 构建安卓 APK
-```
+## Roadmap
 
-## 📖 使用说明
+- Tighten the fastest path from clone to useful demo.
+- Add project-specific screenshots, sample outputs, or a short walkthrough where useful.
+- Promote repeated manual steps into scripts, tests, or documented workflows.
+- Keep security, privacy, and licensing boundaries explicit as the project evolves.
 
-1. **导入真题**：把历年高考试卷 PDF 导入 Get 笔记知识库，AI 分析即以此为依据（详见 `docs/` 内的导入说明）。
-2. **AI 导师**：选学科与模式（学习 / 复习 / 测验）→ 输入想学的知识点 → 对话学习，系统自动记录进度。
-3. **试题分析**：选学科（可指定具体知识点）→ AI 基于真题给出高频考点、命题趋势与预测重点。
-4. **拍题**：拍照上传不会的题，AI 解答并讲解。
-5. **错题本**：把分析过的题一键保存，长期沉淀薄弱环节。
+## Maintainer Notes
 
-## 🗺️ 项目状态
-
-个人实验性项目，由一线教学需求驱动，仍在持续迭代中。核心功能（AI 导师、试题分析、拍题、错题本、进度跟踪、用户系统）已实现并部署；AI 输出质量依赖所配置的 Gemini Key 与导入的真题数据，使用体验会随知识库完善而提升。欢迎试用、提 Issue、给建议。
-
-## 🤝 关于与连接
-
-作者 **Tony（盛）** 是一名自由职业中文培训师，累计教过 6000+ 学员，专注用 AI 打造中文教学与备考工具——把课堂里反复验证有效的方法，做成人人可用的产品。
-
-如果这个项目对你有帮助，欢迎 **⭐ Star** 一下，也欢迎关注 [@shengdabai](https://github.com/shengdabai) 看后续更新。
-
-相关项目：
-
-- [gaokao-600](https://github.com/shengdabai/gaokao-600) — 高考相关复习项目
-- [gaokao-study-materials](https://github.com/shengdabai/gaokao-study-materials) — 高考备考学习资料
-- [college-major-selector](https://github.com/shengdabai/college-major-selector) — 高考志愿 / 专业选择辅助工具
-
-## 📄 许可证
-
-暂无开源协议。
-
----
-
-**高考加油！** 🎯
+Maintained by [Tony Sheng](https://github.com/shengdabai). This README is written as a business-facing handoff: it should help a future collaborator, client, or reviewer understand why the repository exists, how to inspect it, and what must be true before it is reused or shipped.
