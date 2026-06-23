@@ -26,14 +26,13 @@ let pool: Pool | null = null;
 function getPool(): Pool {
   if (!pool) {
     const connectionString = getConnectionString();
-    // Neon 数据库需要 SSL，但可以使用 rejectUnauthorized: false
+    // Neon 数据库需要 SSL，使用标准证书验证（rejectUnauthorized: true）
+    // Neon 提供受信任 CA 签名的证书，无需禁用验证
+    const needsSsl = connectionString.includes('neon.tech') || connectionString.includes('neon')
+      || connectionString.includes('sslmode=require') || connectionString.includes('sslmode=prefer');
     pool = new Pool({
       connectionString,
-      ssl: connectionString.includes('neon.tech') || connectionString.includes('neon') 
-        ? { rejectUnauthorized: false }
-        : connectionString.includes('sslmode=require') || connectionString.includes('sslmode=prefer')
-        ? { rejectUnauthorized: false }
-        : false,
+      ssl: needsSsl ? { rejectUnauthorized: true } : false,
       max: 5,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
@@ -74,8 +73,6 @@ async function query(text: string, params?: any[]): Promise<any> {
  */
 async function initTables(): Promise<void> {
   if (tablesInitialized) return;
-
-  console.log('Initializing database tables...');
 
   try {
     // 用户表
@@ -170,7 +167,6 @@ async function initTables(): Promise<void> {
     await query(`CREATE INDEX IF NOT EXISTS idx_tutor_messages_session_id ON tutor_messages (session_id)`);
 
     tablesInitialized = true;
-    console.log('Database tables and indexes initialized successfully');
   } catch (error: any) {
     console.error('Failed to initialize tables:', error.message);
     throw error;

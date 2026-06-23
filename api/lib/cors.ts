@@ -5,7 +5,9 @@
 
 import type { VercelResponse } from '@vercel/node';
 
-const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || '*';
+// 若未设置 CORS_ORIGIN 环境变量，本地开发退到 localhost，生产环境 vercel.json 响应头会覆盖。
+// 不再默认 '*'，避免开发态 API 被任意来源调用。
+const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 /**
  * 设置 CORS 响应头并处理 OPTIONS 预检请求
