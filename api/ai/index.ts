@@ -12,7 +12,8 @@ import { authenticateRequest } from '../lib/auth';
 import { getDatabase, generateId } from '../lib/db';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
 import { handleCors } from '../lib/cors';
-import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES } from '../lib/constants';
+import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES, VALID_SUBJECTS } from '../lib/constants';
+import { isNonEmptyString, isOptionalString, isSubjectId } from '../lib/validate';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GETNOTES_URL = process.env.GETNOTES_WEBHOOK_URL || '';
@@ -71,6 +72,8 @@ async function handleAsk(req: VercelRequest, res: VercelResponse) {
   if (!question || question.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入问题', 400);
   if (question.length > 2000) return sendError(res, 'INVALID_REQUEST', '问题内容过长', 400);
 
+  if (!isOptionalString(context, 1000)) return sendError(res, 'INVALID_REQUEST', '背景内容无效或过长（最多 1000 字）', 400);
+
   const subjectHint = subject && SUBJECT_NAMES[subject] ? `学生正在学习${SUBJECT_NAMES[subject]}。` : '';
   const contextHint = context ? `\n相关背景：${context}` : '';
 
@@ -91,8 +94,10 @@ async function handleAsk(req: VercelRequest, res: VercelResponse) {
 // ============ AI 导师 ============
 async function handleTutor(req: VercelRequest, res: VercelResponse, userId: string) {
   const { sessionId, message, subject, topic, mode = 'learn' } = req.body;
-  if (!message || message.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入消息', 400);
+  if (!isNonEmptyString(message, 2000)) return sendError(res, 'INVALID_REQUEST', '请输入消息（最多 2000 字）', 400);
   if (!subject) return sendError(res, 'INVALID_REQUEST', '请选择学科', 400);
+  if (!isSubjectId(subject, VALID_SUBJECTS)) return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
+  if (!isOptionalString(topic, 100)) return sendError(res, 'INVALID_REQUEST', '知识点无效或过长（最多 100 字）', 400);
 
   const db = getDatabase();
   let session = { id: sessionId, isNew: false };
@@ -150,6 +155,8 @@ ${knowledgeContext ? `\n知识库参考：\n${knowledgeContext.substring(0, 1500
 async function handlePredict(req: VercelRequest, res: VercelResponse, userId: string) {
   const { subject, topic } = req.body;
   if (!subject) return sendError(res, 'INVALID_REQUEST', '请选择学科', 400);
+  if (!isSubjectId(subject, VALID_SUBJECTS)) return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
+  if (!isOptionalString(topic, 100)) return sendError(res, 'INVALID_REQUEST', '知识点无效或过长（最多 100 字）', 400);
 
   let examData = '';
   if (GETNOTES_TOKEN) {

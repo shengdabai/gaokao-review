@@ -9,6 +9,7 @@ import { getDatabase, generateId } from '../lib/db';
 import { authenticateRequest } from '../lib/auth';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
 import { handleCors } from '../lib/cors';
+import { isOwnKey, isNonEmptyString, isOptionalString, clampInt } from '../lib/validate';
 
 /**
  * 高考知识点体系 - 各学科核心考点
@@ -166,12 +167,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 return sendError(res, 'INVALID_REQUEST', '请指定学科和知识点', 400);
             }
 
-            // Validate subject exists
-            if (!GAOKAO_TOPICS[subject]) {
+            // Validate subject exists (自有键判断，防止 constructor / __proto__ 等原型键绕过)
+            if (!isOwnKey(GAOKAO_TOPICS, subject)) {
                 return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
             }
 
-            const change = typeof masteryChange === 'number' ? masteryChange : 5;
+            // Validate topic belongs to the subject
+            if (!isNonEmptyString(topic, 100) || !GAOKAO_TOPICS[subject].includes(topic)) {
+                return sendError(res, 'INVALID_REQUEST', '无效的知识点', 400);
+            }
+
+            if (!isOptionalString(notes, 500)) {
+                return sendError(res, 'INVALID_REQUEST', '备注无效或过长（最多 500 字）', 400);
+            }
+
+            const change = clampInt(masteryChange, -100, 100, 5);
             const updated = await db.updateStudyProgress(
                 auth.userId,
                 subject,

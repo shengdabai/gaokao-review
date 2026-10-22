@@ -55,15 +55,6 @@ EOF
     echo -e "${YELLOW}请编辑 .env.local 文件，填入你的 API Key${NC}"
 fi
 
-# 初始化数据库
-echo ""
-echo "🗃️ 初始化数据库..."
-mkdir -p data
-if [ -f "scripts/init-db.js" ]; then
-    node scripts/init-db.js
-    echo -e "${GREEN}✓ 数据库初始化完成${NC}"
-fi
-
 echo ""
 echo "========================================"
 echo -e "${GREEN}🎉 安装完成！${NC}"
