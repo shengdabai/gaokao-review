@@ -13,7 +13,7 @@ import { authenticateRequest } from '../lib/auth';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
 import { handleCors } from '../lib/cors';
 import { VALID_SUBJECTS, safeJsonParse } from '../lib/constants';
-import { isNonEmptyString, isSubjectId, normalizeTags } from '../lib/validate';
+import { MAX_IMAGE_BYTES, MAX_IMAGE_URL_LENGTH, isHttpsUrl, isNonEmptyString, isSubjectId, normalizeTags, parseDataImage } from '../lib/validate';
 
 // 获取错题列表
 async function handleGetList(req: VercelRequest, res: VercelResponse, userId: string) {
@@ -81,8 +81,9 @@ async function handleAdd(req: VercelRequest, res: VercelResponse, userId: string
     return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
   }
   if (!imageUrl) return sendError(res, 'INVALID_REQUEST', '请提供题目图片', 400);
-  if (typeof imageUrl !== 'string' || !(imageUrl.startsWith('data:image/') || imageUrl.startsWith('https://'))) {
-    return sendError(res, 'INVALID_REQUEST', '图片格式无效', 400);
+  // data URL：合法 Base64 图片，解码后最多 3 MB；https 地址：可解析、有主机名，最多 2048 字
+  if (!parseDataImage(imageUrl, MAX_IMAGE_BYTES) && !isHttpsUrl(imageUrl, MAX_IMAGE_URL_LENGTH)) {
+    return sendError(res, 'INVALID_REQUEST', '图片格式无效或过大（最多 3 MB）', 400);
   }
   if (!analysis) return sendError(res, 'INVALID_REQUEST', '请提供分析内容', 400);
   if (!isNonEmptyString(analysis, 20000)) {

@@ -12,6 +12,9 @@ import {
   isSubjectId,
   clampInt,
   normalizeTags,
+  parseDataImage,
+  isHttpsUrl,
+  MAX_IMAGE_BYTES,
 } from './validate.ts';
 
 const SUBJECTS = ['math', 'physics', 'chemistry', 'chinese', 'english', 'politics'];
@@ -101,4 +104,41 @@ test('normalizeTags: 数量与单项长度上限', () => {
   const many = Array.from({ length: 25 }, (_, i) => `t${i}`);
   assert.equal(normalizeTags(many, 20, 30).length, 20);
   assert.deepEqual(normalizeTags(['a'.repeat(31)], 20, 30), ['a'.repeat(30)]);
+});
+
+const b64 = (bytes: number) => Buffer.alloc(bytes, 1).toString('base64');
+
+test('parseDataImage: 合法图片返回 MIME 与数据', () => {
+  assert.deepEqual(parseDataImage(`data:image/png;base64,${b64(3)}`, 10), { mimeType: 'image/png', base64: b64(3) });
+  for (const type of ['jpeg', 'webp', 'gif', 'heic', 'heif']) {
+    assert.equal(parseDataImage(`data:image/${type};base64,${b64(4)}`, 10)?.mimeType, `image/${type}`);
+  }
+});
+
+test('parseDataImage: 类型、编码、长度不合法返回 null', () => {
+  for (const v of [
+    42, null, undefined, '',
+    'data:image/',
+    'data:image/png;base64,',
+    'data:image/png;base64,@@@@',
+    'data:image/png;base64,AAA',
+    'data:image/svg+xml;base64,PHN2Zz4=',
+    `data:text/plain;base64,${b64(3)}`,
+    `data:image/png,${b64(3)}`,
+  ]) {
+    assert.equal(parseDataImage(v, 10), null, String(v));
+  }
+});
+
+test('parseDataImage: 按解码后的字节数限制大小', () => {
+  assert.notEqual(parseDataImage(`data:image/png;base64,${b64(10)}`, 10), null);
+  assert.equal(parseDataImage(`data:image/png;base64,${b64(11)}`, 10), null);
+  assert.equal(parseDataImage(`data:image/png;base64,${b64(MAX_IMAGE_BYTES + 1)}`, MAX_IMAGE_BYTES), null);
+});
+
+test('isHttpsUrl: 只接受可解析、有主机名、不超长的 https 地址', () => {
+  assert.equal(isHttpsUrl('https://cdn.example.com/a.png', 100), true);
+  for (const v of ['https://', 'https://[invalid', 'http://example.com/a.png', 'javascript:alert(1)', 42, `https://e.com/${'a'.repeat(100)}`]) {
+    assert.equal(isHttpsUrl(v, 100), false, String(v));
+  }
 });

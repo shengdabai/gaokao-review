@@ -13,7 +13,9 @@ import { getDatabase, generateId } from '../lib/db';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
 import { handleCors } from '../lib/cors';
 import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES, VALID_SUBJECTS } from '../lib/constants';
-import { isNonEmptyString, isOptionalString, isSubjectId } from '../lib/validate';
+import { MAX_IMAGE_BYTES, isNonEmptyString, isOptionalString, isSubjectId, parseDataImage } from '../lib/validate';
+
+const TUTOR_MODES: readonly string[] = ['learn', 'review', 'quiz'];
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GETNOTES_URL = process.env.GETNOTES_WEBHOOK_URL || '';
@@ -25,12 +27,11 @@ const IMAGE_MODEL = 'gemini-2.0-flash-exp';
 async function handleAnalyze(req: VercelRequest, res: VercelResponse) {
   const { image, subject } = req.body;
   if (!image) return sendError(res, 'INVALID_REQUEST', '请上传题目图片', 400);
-  if (!image.startsWith('data:image/')) return sendError(res, 'INVALID_REQUEST', '图片格式无效', 400);
+  // 先查类型再解析；解码后最多 3 MB，超出的图片不进入 Gemini
+  const parsed = parseDataImage(image, MAX_IMAGE_BYTES);
+  if (!parsed) return sendError(res, 'INVALID_REQUEST', '图片格式无效或过大（最多 3 MB）', 400);
 
-  const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
-  if (!matches) return sendError(res, 'INVALID_REQUEST', '图片数据格式错误', 400);
-
-  const [, mimeType, base64Data] = matches;
+  const { mimeType, base64: base64Data } = parsed;
   const subjectHint = subject && SUBJECT_NAMES[subject] ? `这可能是一道${SUBJECT_NAMES[subject]}题目。` : '';
 
   const prompt = `你是一位专业的高考辅导老师。${subjectHint}
@@ -69,7 +70,7 @@ async function handleAnalyze(req: VercelRequest, res: VercelResponse) {
 // ============ 文本问答 ============
 async function handleAsk(req: VercelRequest, res: VercelResponse) {
   const { question, subject, context } = req.body;
-  if (!question || question.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入问题', 400);
+  if (typeof question !== 'string' || question.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入问题', 400);
   if (question.length > 2000) return sendError(res, 'INVALID_REQUEST', '问题内容过长', 400);
 
   if (!isOptionalString(context, 1000)) return sendError(res, 'INVALID_REQUEST', '背景内容无效或过长（最多 1000 字）', 400);
@@ -95,6 +96,7 @@ async function handleAsk(req: VercelRequest, res: VercelResponse) {
 async function handleTutor(req: VercelRequest, res: VercelResponse, userId: string) {
   const { sessionId, message, subject, topic, mode = 'learn' } = req.body;
   if (!isNonEmptyString(message, 2000)) return sendError(res, 'INVALID_REQUEST', '请输入消息（最多 2000 字）', 400);
+  if (!TUTOR_MODES.includes(mode)) return sendError(res, 'INVALID_REQUEST', '无效的学习模式', 400);
   if (!subject) return sendError(res, 'INVALID_REQUEST', '请选择学科', 400);
   if (!isSubjectId(subject, VALID_SUBJECTS)) return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
   if (!isOptionalString(topic, 100)) return sendError(res, 'INVALID_REQUEST', '知识点无效或过长（最多 100 字）', 400);

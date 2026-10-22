@@ -88,9 +88,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 bySubject: {} as Record<string, any>
             };
 
-            // 按学科分组
-            const bySubject: Record<string, any[]> = {};
+            // 按学科分组。只认 GAOKAO_TOPICS 的自有学科键：旧版本可能已写入 constructor、__proto__ 等记录，
+            // 读取时跳过它们，分组对象也不带原型
+            const bySubject: Record<string, any[]> = Object.create(null);
             for (const p of progress) {
+                if (!isOwnKey(GAOKAO_TOPICS, p.subject)) continue;
                 if (!bySubject[p.subject]) {
                     bySubject[p.subject] = [];
                 }
