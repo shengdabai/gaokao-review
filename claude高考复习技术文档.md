@@ -1173,7 +1173,7 @@ export const getUnsyncedMistakes = async () => {
 │   ❌ 错误做法:                                                  │
 │   ┌─────────────────────────────────────────────────────────┐   │
 │   │  // 直接在代码中硬编码                                   │   │
-│   │  const API_KEY = "<REDACTED_API_KEY>"│   │
+│   │  const API_KEY = "AIza_REDACTED_BY_CLAUDE_20261023_SEE_REPORT"│   │
 │   └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │   ✅ 正确做法:                                                  │
