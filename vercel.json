@@ -26,7 +26,7 @@
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "https://gaokao-fuxi.vercel.app"
+          "value": "https://gaokao-review.vercel.app"
         },
         {
           "key": "Vary",
