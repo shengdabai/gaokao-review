@@ -37,3 +37,6 @@ data/
 
 # Vercel
 .vercel
+
+# local agent state
+.omc/state/
