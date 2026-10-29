@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Camera, Upload, Search, BookOpen, Brain, Zap, ChevronRight, GraduationCap, History, Trash2, Bookmark, X, Key, Lock, LogOut, User, MessageCircle, TrendingUp, BarChart3, Filter } from "lucide-react";
-import { useAuth } from "./hooks/useAuth";
+import { useAuth, type UseAuthReturn } from "./hooks/useAuth";
 import { AuthPage } from "./components/AuthPage";
 import { TutorChat } from "./components/TutorChat";
 import { PredictAnalysis } from "./components/PredictAnalysis";
@@ -19,8 +19,36 @@ interface ErrorItem {
 }
 
 const App = () => {
-  // 认证状态
   const auth = useAuth();
+
+  if (auth.isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="loader"></div>
+      </div>
+    );
+  }
+
+  if (!auth.isLoggedIn || !auth.user?.userId) {
+    return (
+      <AuthPage
+        onLogin={auth.login}
+        onRegister={auth.register}
+        isLoading={auth.isLoading}
+        error={auth.error}
+      />
+    );
+  }
+
+  // Unmount all account data on logout; remount on userId changes even if the
+  // logged-in flag stays true. Keep each user's offline backup for re-login.
+  return React.createElement(StudyApp, { key: auth.user.userId, auth, userId: auth.user.userId });
+};
+
+const StudyApp = ({ auth, userId }: { auth: UseAuthReturn; userId: string }) => {
+  // Legacy global keys have no provable owner and must never be read/migrated.
+  const historyCacheKey = `app_search_history:${userId}`;
+  const notebookCacheKey = `app_error_notebook:${userId}`;
 
   // API Key State (保留兼容性)
   const [hasApiKey, setHasApiKey] = useState(true); // 默认使用后端 API
@@ -48,19 +76,19 @@ const App = () => {
   const [mistakeSubjectFilter, setMistakeSubjectFilter] = useState<string>("all");
 
   // Initialize Data - 从服务器加载数据
-  // NOTE: useEffect must be called before any conditional returns (React Rules of Hooks)
   useEffect(() => {
+    let cancelled = false;
     const init = async () => {
-      if (!auth.isLoggedIn) return;
-
       try {
         // 加载搜索历史
         const historyResult = await api.getSearchHistory(10);
+        if (cancelled) return;
         setSearchHistory(historyResult.items.map(h => h.query));
       } catch (e) {
+        if (cancelled) return;
         console.error("Failed to load search history", e);
         // 降级到本地存储
-        const savedHistory = localStorage.getItem("app_search_history");
+        const savedHistory = localStorage.getItem(historyCacheKey);
         if (savedHistory) {
           try {
             setSearchHistory(JSON.parse(savedHistory));
@@ -73,6 +101,7 @@ const App = () => {
       try {
         // 加载错题本
         const mistakesResult = await api.getMistakes({ limit: 100 });
+        if (cancelled) return;
         setErrorNotebook(mistakesResult.items.map(m => ({
           id: m.id,
           subject: m.subject,
@@ -82,9 +111,10 @@ const App = () => {
           date: new Date(m.createdAt).toLocaleDateString()
         })));
       } catch (e) {
+        if (cancelled) return;
         console.error("Failed to load mistakes", e);
         // 降级到本地存储
-        const savedNotebook = localStorage.getItem("app_error_notebook");
+        const savedNotebook = localStorage.getItem(notebookCacheKey);
         if (savedNotebook) {
           try {
             setErrorNotebook(JSON.parse(savedNotebook));
@@ -95,28 +125,8 @@ const App = () => {
       }
     };
     init();
-  }, [auth.isLoggedIn]);
-
-  // 如果未登录，显示认证页面
-  if (!auth.isLoggedIn && !auth.isLoading) {
-    return (
-      <AuthPage
-        onLogin={auth.login}
-        onRegister={auth.register}
-        isLoading={auth.isLoading}
-        error={auth.error}
-      />
-    );
-  }
-
-  // 加载中
-  if (auth.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="loader"></div>
-      </div>
-    );
-  }
+    return () => { cancelled = true; };
+  }, [historyCacheKey, notebookCacheKey]);
 
   const handleSelectKey = async () => {
     if ((window as any).aistudio) {
@@ -134,14 +144,14 @@ const App = () => {
   const updateHistory = (term: string) => {
     setSearchHistory(prev => {
       const newHistory = [term, ...prev.filter(h => h !== term)].slice(0, 6);
-      localStorage.setItem("app_search_history", JSON.stringify(newHistory));
+      localStorage.setItem(historyCacheKey, JSON.stringify(newHistory));
       return newHistory;
     });
   };
 
   const clearHistory = () => {
     setSearchHistory([]);
-    localStorage.removeItem("app_search_history");
+    localStorage.removeItem(historyCacheKey);
   };
 
   // --- Error Notebook Logic ---
@@ -169,7 +179,7 @@ const App = () => {
       const newNotebook = [newItem, ...errorNotebook];
       setErrorNotebook(newNotebook);
       // 同时保存到本地作为备份
-      localStorage.setItem("app_error_notebook", JSON.stringify(newNotebook));
+      localStorage.setItem(notebookCacheKey, JSON.stringify(newNotebook));
 
       alert("已成功加入错题本！");
     } catch (error: any) {
@@ -192,7 +202,7 @@ const App = () => {
 
       const newNotebook = errorNotebook.filter(item => item.id !== id);
       setErrorNotebook(newNotebook);
-      localStorage.setItem("app_error_notebook", JSON.stringify(newNotebook));
+      localStorage.setItem(notebookCacheKey, JSON.stringify(newNotebook));
     } catch (error: any) {
       console.error("Delete mistake failed", error);
       if (error.code === 'UNAUTHORIZED') {

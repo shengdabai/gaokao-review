@@ -2,7 +2,7 @@
  * 个人中心页面
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,15 +18,18 @@ import * as storage from '@/services/storage';
 export default function ProfileScreen() {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const cacheSessionActive = useRef(true);
 
   useEffect(() => {
+    cacheSessionActive.current = true;
     loadUserInfo();
+    return () => { cacheSessionActive.current = false; };
   }, []);
 
   const loadUserInfo = async () => {
     try {
       const userInfo = await api.getCurrentUser();
-      setUser(userInfo);
+      if (cacheSessionActive.current) setUser(userInfo);
     } catch (error) {
       console.error('Failed to load user info:', error);
     } finally {
@@ -44,6 +47,8 @@ export default function ProfileScreen() {
           text: '退出',
           style: 'destructive',
           onPress: async () => {
+            cacheSessionActive.current = false;
+            setUser(null);
             await api.clearToken();
             router.replace('/(auth)/login');
           },
@@ -53,22 +58,31 @@ export default function ProfileScreen() {
   };
 
   const handleSync = async () => {
+    const userId = user?.userId;
+    if (!userId || !cacheSessionActive.current) {
+      Alert.alert('提示', '用户信息尚未加载，请稍后重试');
+      return;
+    }
+
     try {
       Alert.alert('提示', '正在同步数据...');
       
       // 获取未同步的本地数据
-      const unsyncedMistakes = await storage.getUnsyncedMistakes();
-      const lastSyncTime = await storage.getLastSyncTime();
+      const unsyncedMistakes = await storage.getUnsyncedMistakes(userId);
+      const lastSyncTime = await storage.getLastSyncTime(userId);
+      // Do not submit an old account's offline cache after logout/unmount.
+      if (!cacheSessionActive.current) return;
       
       // 调用同步 API
       const result = await api.syncMistakes({
         lastSyncTime: lastSyncTime || undefined,
         localMistakes: unsyncedMistakes,
       });
+      if (!cacheSessionActive.current) return;
       
       // 保存服务器数据到本地
       for (const mistake of result.serverMistakes) {
-        await storage.saveMistakeLocally({
+        await storage.saveMistakeLocally(userId, {
           ...mistake,
           synced: true,
         });
@@ -77,12 +91,12 @@ export default function ProfileScreen() {
       // 标记已同步的数据
       for (const syncResult of result.syncResults) {
         if (syncResult.status === 'created' || syncResult.status === 'updated') {
-          await storage.markMistakeSynced(syncResult.id);
+          await storage.markMistakeSynced(userId, syncResult.id);
         }
       }
       
       // 更新同步时间
-      await storage.setLastSyncTime(result.syncTime);
+      await storage.setLastSyncTime(userId, result.syncTime);
       
       Alert.alert('成功', '数据同步完成');
     } catch (error: any) {
@@ -91,6 +105,12 @@ export default function ProfileScreen() {
   };
 
   const handleClearCache = () => {
+    const userId = user?.userId;
+    if (!userId || !cacheSessionActive.current) {
+      Alert.alert('提示', '用户信息尚未加载，请稍后重试');
+      return;
+    }
+
     Alert.alert(
       '确认清除',
       '确定要清除本地缓存吗？这不会影响云端数据。',
@@ -100,7 +120,8 @@ export default function ProfileScreen() {
           text: '清除',
           style: 'destructive',
           onPress: async () => {
-            await storage.clearAllLocalData();
+            if (!cacheSessionActive.current) return;
+            await storage.clearAllLocalData(userId);
             Alert.alert('成功', '本地缓存已清除');
           },
         },
