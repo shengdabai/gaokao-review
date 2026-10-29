@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test tests/*.test.cjs",
     "preview": "vite preview",
     "api:dev": "vercel dev",
     "db:init": "node scripts/init-db.js"

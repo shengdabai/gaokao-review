@@ -117,7 +117,7 @@ vercel --prod
 ## 📱 Mobile App
 
 ```bash
-cd gaokao-review-mobile
+cd 高考复习-mobile
 npm install
 
 # Development mode
@@ -204,7 +204,7 @@ Import PDF files of past Gaokao papers from iCloud to GetNotes knowledge base. S
 
 - **前端**: React 19 + Vite + Tailwind CSS
 - **后端**: Vercel Serverless Functions
-- **数据库**: SQLite
+- **数据库**: PostgreSQL
 - **AI**: Gemini API
 - **知识库**: Get笔记 API
 - **移动端**: React Native + Expo

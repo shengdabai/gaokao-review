@@ -48,7 +48,7 @@ export default function TutorScreen() {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [subject, setSubject] = useState(SUBJECTS[0]);
+    const [subject, setSubject] = useState<(typeof SUBJECTS)[number]>(SUBJECTS[0]);
     const [mode, setMode] = useState<'learn' | 'review' | 'quiz'>('learn');
     const [topic, setTopic] = useState('');
     const [showSubjects, setShowSubjects] = useState(false);

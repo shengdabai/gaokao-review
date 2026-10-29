@@ -12,7 +12,7 @@ import { authenticateRequest } from '../lib/auth';
 import { getDatabase, generateId } from '../lib/db';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
 import { handleCors } from '../lib/cors';
-import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES } from '../lib/constants';
+import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES, VALID_SUBJECTS } from '../lib/constants';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GETNOTES_URL = process.env.GETNOTES_WEBHOOK_URL || '';
@@ -23,7 +23,7 @@ const IMAGE_MODEL = 'gemini-2.0-flash-exp';
 // ============ 图片分析 ============
 async function handleAnalyze(req: VercelRequest, res: VercelResponse) {
   const { image, subject } = req.body;
-  if (!image) return sendError(res, 'INVALID_REQUEST', '请上传题目图片', 400);
+  if (typeof image !== 'string' || !image) return sendError(res, 'INVALID_REQUEST', '请上传题目图片', 400);
   if (!image.startsWith('data:image/')) return sendError(res, 'INVALID_REQUEST', '图片格式无效', 400);
 
   const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
@@ -68,7 +68,7 @@ async function handleAnalyze(req: VercelRequest, res: VercelResponse) {
 // ============ 文本问答 ============
 async function handleAsk(req: VercelRequest, res: VercelResponse) {
   const { question, subject, context } = req.body;
-  if (!question || question.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入问题', 400);
+  if (typeof question !== 'string' || question.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入问题', 400);
   if (question.length > 2000) return sendError(res, 'INVALID_REQUEST', '问题内容过长', 400);
 
   const subjectHint = subject && SUBJECT_NAMES[subject] ? `学生正在学习${SUBJECT_NAMES[subject]}。` : '';
@@ -91,8 +91,8 @@ async function handleAsk(req: VercelRequest, res: VercelResponse) {
 // ============ AI 导师 ============
 async function handleTutor(req: VercelRequest, res: VercelResponse, userId: string) {
   const { sessionId, message, subject, topic, mode = 'learn' } = req.body;
-  if (!message || message.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入消息', 400);
-  if (!subject) return sendError(res, 'INVALID_REQUEST', '请选择学科', 400);
+  if (typeof message !== 'string' || message.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入消息', 400);
+  if (typeof subject !== 'string' || !VALID_SUBJECTS.includes(subject)) return sendError(res, 'INVALID_REQUEST', '请选择有效学科', 400);
 
   const db = getDatabase();
   let session = { id: sessionId, isNew: false };
@@ -147,9 +147,45 @@ ${knowledgeContext ? `\n知识库参考：\n${knowledgeContext.substring(0, 1500
 }
 
 // ============ 试题预测 ============
+// Validate the fields consumed by PredictAnalysis before reporting success.
+function parsePrediction(text: string): unknown | null {
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+
+  let analysis: unknown;
+  try {
+    analysis = JSON.parse(jsonMatch[0]);
+  } catch {
+    return null;
+  }
+
+  if (!analysis || typeof analysis !== 'object' || Array.isArray(analysis)) return null;
+  const fields = {
+    hotspots: { top5: 'list', analysis: 'text' },
+    trends: { summary: 'text', changes: 'list', difficulty: 'text' },
+    predictions: { mustKnow: 'list', likelyTopics: 'list', reasoning: 'text' },
+    studyPlan: { priority: 'list', timeAllocation: 'text', strategies: 'list', commonMistakes: 'list' },
+    examTips: { timeManagement: 'text', answeringOrder: 'text', checkPoints: 'list' },
+  };
+
+  for (const [section, properties] of Object.entries(fields)) {
+    const value = (analysis as Record<string, unknown>)[section];
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    for (const [property, type] of Object.entries(properties)) {
+      const field = (value as Record<string, unknown>)[property];
+      if (type === 'list') {
+        if (!Array.isArray(field) || !field.every(item => typeof item === 'string')) return null;
+      } else if (typeof field !== 'string') {
+        return null;
+      }
+    }
+  }
+  return analysis;
+}
+
 async function handlePredict(req: VercelRequest, res: VercelResponse, userId: string) {
   const { subject, topic } = req.body;
-  if (!subject) return sendError(res, 'INVALID_REQUEST', '请选择学科', 400);
+  if (typeof subject !== 'string' || !VALID_SUBJECTS.includes(subject)) return sendError(res, 'INVALID_REQUEST', '请选择有效学科', 400);
 
   let examData = '';
   if (GETNOTES_TOKEN) {
@@ -182,9 +218,8 @@ ${topic ? `【重点分析】${topic}` : ''}
   const result = await model.generateContent(prompt);
   const text = result.response.text();
 
-  let analysis = {};
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) { try { analysis = JSON.parse(jsonMatch[0]); } catch (e) {} }
+  const analysis = parsePrediction(text);
+  if (!analysis) return sendPredefinedError(res, 'AI_ERROR', '预测结果格式不完整，请重试');
 
   return sendSuccess(res, { subject, subjectName: SUBJECT_NAMES[subject] || subject, topic: topic || '全部', analysis, hasKnowledgeData: !!examData, userWeakPoints: weakPoints, generatedAt: new Date().toISOString() });
 }
@@ -201,6 +236,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const auth = authenticateRequest(req);
     if (!auth) return sendPredefinedError(res, 'UNAUTHORIZED');
+
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return sendError(res, 'INVALID_REQUEST', '请提供 JSON 对象格式的请求参数', 400);
+    }
 
     const action = req.query.action as string;
 
