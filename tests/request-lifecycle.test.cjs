@@ -12,7 +12,7 @@ const deferred = () => {
 
 // Execute real hooks/components with deterministic lifecycle and API substitutes.
 // This never imports the real API client, browser storage, credentials or network.
-function renderModule(file, exported, api, initialProps = {}) {
+function renderModule(file, exported, api, initialProps = {}, imports = {}) {
   const slots = [], effects = [];
   const listeners = new Map();
   let cursor, value, dirty = true, active = true, props = initialProps;
@@ -48,8 +48,9 @@ function renderModule(file, exported, api, initialProps = {}) {
   vm.runInNewContext(source, {
     module, exports: module.exports,
     require(name) {
+      if (Object.hasOwn(imports, name)) return imports[name];
       if (name === 'react') return { ...react, default: react };
-      if (name === '../services/api') return api;
+      if (name === '../services/api' || name === '@/services/api') return api;
       if (name === 'lucide-react') return new Proxy({}, { get: (_, key) => String(key) });
       throw new Error(`Unexpected import: ${name}`);
     },
@@ -59,6 +60,8 @@ function renderModule(file, exported, api, initialProps = {}) {
       removeEventListener: type => listeners.delete(type),
     },
     console: { error() {} },
+    // Scrolling timers do not affect chat state; keep them off the event loop.
+    setTimeout() { return 0; }, clearTimeout() {},
   });
   function flush() {
     for (let i = 0; dirty && active; i++) {
@@ -87,9 +90,9 @@ function renderModule(file, exported, api, initialProps = {}) {
     unmount() { active = false; slots.forEach(slot => slot?.cleanup?.()); },
     async settle() { for (let i = 0; i < 8; i++) { await Promise.resolve(); flush(); } },
     click(label) {
-      const button = nodes().find(n => n.type === 'button' && (text(n).includes(label) || n.props.title === label));
+      const button = nodes().find(n => ['button', 'TouchableOpacity'].includes(n.type) && (text(n).includes(label) || n.props.title === label));
       assert.ok(button, `button ${label} exists`);
-      const pending = button.props.onClick(); flush(); return pending;
+      const pending = (button.props.onClick || button.props.onPress)(); flush(); return pending;
     },
   };
 }
@@ -212,6 +215,106 @@ test('auth: another tab account change hides A until B is verified', async () =>
 
 const math = { id: 'math', name: '数学', icon: 'M' };
 const physics = { id: 'physics', name: '物理', icon: 'P' };
+
+function tutorFixture(platform, chatWithTutor) {
+  const calls = { clears: 0, redirects: 0 };
+  const api = { chatWithTutor, clearToken: async () => { calls.clears++; } };
+  const app = platform === 'web'
+    ? renderModule('components/TutorChat.tsx', 'TutorChat', api, { subject: math })
+    : renderModule('高考复习-mobile/app/(tabs)/tutor.tsx', 'default', api, {}, {
+      'react-native': {
+        ...Object.fromEntries(['View', 'Text', 'TextInput', 'TouchableOpacity', 'ScrollView',
+          'KeyboardAvoidingView', 'ActivityIndicator'].map(name => [name, name])),
+        StyleSheet: { create: styles => styles }, Platform: { OS: 'android' },
+      },
+      'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' },
+      'expo-router': { router: { replace() { calls.redirects++; } } },
+      '@/constants/api': { SUBJECTS: [math, physics] },
+    });
+  return {
+    app, calls,
+    send(text) {
+      const input = app.nodes().find(n => n.props?.placeholder?.startsWith('输入你的问题'));
+      assert.ok(input);
+      assert.notEqual(input.props.disabled, true);
+      assert.notEqual(input.props.editable, false);
+      if (platform === 'web') input.props.onChange({ target: { value: text } });
+      else input.props.onChangeText(text);
+      app.flush();
+      const button = app.nodes().find(n => platform === 'web'
+        ? n.type === 'button' && app.nodes(n).some(child => child.type === 'Send')
+        : n.type === 'TouchableOpacity' && app.text(n) === '➤');
+      assert.ok(button, 'send button exists and is ready');
+      assert.notEqual(button.props.disabled, true);
+      const pending = (button.props.onClick || button.props.onPress)();
+      app.flush();
+      return pending;
+    },
+    reset(kind) {
+      if (kind === 'subject') { app.click('数学'); app.click('物理'); }
+      if (kind === 'mode') app.click('🎯');
+      if (kind === 'new-chat') {
+        const button = app.nodes().filter(n => n.type === 'TouchableOpacity' && app.text(n) === '🔄').at(-1);
+        assert.ok(button);
+        button.props.onPress(); app.flush();
+      }
+      if (kind === 'unmount') app.unmount();
+    },
+  };
+}
+
+for (const platform of ['web', 'mobile']) {
+  test(`${platform} tutor: backend replacement session is used by the next message without losing history`, async () => {
+    const requests = [];
+    const fixture = tutorFixture(platform, async args => {
+      requests.push(args);
+      return { sessionId: requests.length === 1 ? 'initial-session' : 'replacement-session',
+        response: `answer-${requests.length}` };
+    });
+    for (const text of ['first question', 'second question', 'third question']) {
+      await fixture.send(text); await fixture.app.settle();
+    }
+    assert.deepEqual(requests.map(request => request.sessionId), [undefined, 'initial-session', 'replacement-session']);
+    for (const text of ['first question', 'second question', 'third question', 'answer-1', 'answer-2', 'answer-3']) {
+      assert.ok(fixture.app.text().includes(text), `${text} remains in the conversation`);
+    }
+  });
+}
+
+for (const reset of ['subject', 'mode', 'new-chat', 'unmount']) {
+  for (const outcome of reset === 'unmount' ? ['unauthorized'] : ['success', 'error', 'unauthorized']) {
+    test(`mobile tutor: ${reset} discards stale ${outcome} and preserves the current request`, async () => {
+      const old = deferred(), current = deferred(), requests = [];
+      const fixture = tutorFixture('mobile', args => {
+        requests.push(args);
+        if (requests.length === 1) return old.promise;
+        if (requests.length === 2) return current.promise;
+        return Promise.resolve({ sessionId: 'current-session', response: 'follow-up-answer' });
+      });
+      const first = fixture.send('old question');
+      fixture.reset(reset);
+      // A new conversation must be usable before the old request finishes.
+      const second = reset === 'unmount' ? null : fixture.send('current question');
+      if (outcome === 'success') old.resolve({ sessionId: 'stale-session', response: 'stale-answer' });
+      else old.reject(Object.assign(new Error('stale-error'), { code: outcome === 'unauthorized' ? 'UNAUTHORIZED' : 'NETWORK_ERROR' }));
+      await first; await fixture.app.settle();
+      assert.doesNotMatch(fixture.app.text(), /stale-answer|stale-error/);
+      assert.equal(fixture.calls.clears, 0);
+      assert.equal(fixture.calls.redirects, 0);
+      if (reset === 'unmount') return;
+      assert.equal(requests[1].sessionId, undefined);
+      assert.equal(requests[1].mode, reset === 'mode' ? 'quiz' : 'learn');
+      assert.equal(requests[1].subject, reset === 'subject' ? 'physics' : 'math');
+      assert.equal(fixture.app.nodes().find(n => n.type === 'TextInput' && n.props.multiline).props.editable, false,
+        'old completion must not release the current loading state');
+      current.resolve({ sessionId: 'current-session', response: 'current-answer' });
+      await second; await fixture.app.settle();
+      assert.match(fixture.app.text(), /current-answer/);
+      await fixture.send('follow-up question'); await fixture.app.settle();
+      assert.equal(requests[2].sessionId, 'current-session');
+    });
+  }
+}
 
 for (const reset of ['subject', 'mode', 'new-chat', 'unmount']) {
   test(`tutor: ${reset} invalidates the previous response and session`, async () => {

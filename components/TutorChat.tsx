@@ -115,7 +115,7 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
             if (request !== chatRequest.current) return;
 
             // 保存 sessionId
-            if (!sessionId) {
+            if (response.sessionId !== sessionId) {
                 setSessionId(response.sessionId);
             }
 

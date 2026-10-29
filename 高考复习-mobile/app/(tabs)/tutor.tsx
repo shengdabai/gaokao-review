@@ -54,6 +54,7 @@ export default function TutorScreen() {
     const [showSubjects, setShowSubjects] = useState(false);
 
     const scrollViewRef = useRef<ScrollView>(null);
+    const chatRequest = useRef(0);
 
     // 滚动到底部
     useEffect(() => {
@@ -63,17 +64,22 @@ export default function TutorScreen() {
         return () => clearTimeout(timer);
     }, [messages]);
 
-    // 切换学科时重置
+    // 切换学科或模式时重置，并丢弃旧请求的结果
     useEffect(() => {
+        chatRequest.current++;
         setMessages([]);
         setSessionId(null);
         setTopic('');
-    }, [subject.id]);
+        setInput('');
+        setIsLoading(false);
+        return () => { chatRequest.current++; };
+    }, [subject.id, mode]);
 
     // 发送消息
     const sendMessage = async (text?: string) => {
         const messageText = text || input.trim();
         if (!messageText || isLoading) return;
+        const request = ++chatRequest.current;
 
         // 添加用户消息
         const userMsg: Message = {
@@ -93,8 +99,9 @@ export default function TutorScreen() {
                 topic: topic || undefined,
                 mode,
             });
+            if (request !== chatRequest.current) return;
 
-            if (!sessionId) {
+            if (response.sessionId !== sessionId) {
                 setSessionId(response.sessionId);
             }
 
@@ -106,6 +113,7 @@ export default function TutorScreen() {
             setMessages(prev => [...prev, assistantMsg]);
 
         } catch (error: any) {
+            if (request !== chatRequest.current) return;
             if (error.code === 'UNAUTHORIZED') {
                 await clearToken();
                 router.replace('/(auth)/login');
@@ -119,14 +127,16 @@ export default function TutorScreen() {
             };
             setMessages(prev => [...prev, errorMsg]);
         } finally {
-            setIsLoading(false);
+            if (request === chatRequest.current) setIsLoading(false);
         }
     };
 
     // 开始新对话
     const startNewChat = () => {
+        chatRequest.current++;
         setMessages([]);
         setSessionId(null);
+        setIsLoading(false);
     };
 
     return (
