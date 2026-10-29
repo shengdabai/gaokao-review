@@ -3,7 +3,7 @@
  * 管理用户认证状态
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   getToken, 
   setToken, 
@@ -37,11 +37,14 @@ export function useAuth(): UseAuthReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Logout, unmount and newer auth operations invalidate older responses.
+  const authRequest = useRef(0);
 
   /**
    * 刷新用户信息
    */
   const refreshUser = useCallback(async () => {
+    const request = ++authRequest.current;
     const token = getToken();
     if (!token) {
       setIsLoggedIn(false);
@@ -52,10 +55,12 @@ export function useAuth(): UseAuthReturn {
 
     try {
       const userInfo = await getCurrentUser();
+      if (request !== authRequest.current) return;
       setUser(userInfo);
       setIsLoggedIn(true);
       setError(null);
     } catch (err: any) {
+      if (request !== authRequest.current) return;
       // Token 无效或过期
       if (err.status === 401) {
         clearToken();
@@ -64,7 +69,7 @@ export function useAuth(): UseAuthReturn {
       }
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      if (request === authRequest.current) setIsLoading(false);
     }
   }, []);
 
@@ -73,30 +78,49 @@ export function useAuth(): UseAuthReturn {
    */
   useEffect(() => {
     refreshUser();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== 'auth_token' && event.key !== null) return;
+      if (event.storageArea && event.storageArea !== localStorage) return;
+      // Hide the old account before validating another tab's new token.
+      setUser(null);
+      setIsLoggedIn(false);
+      setError(null);
+      setIsLoading(true);
+      refreshUser();
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      authRequest.current++;
+      window.removeEventListener('storage', handleStorage);
+    };
   }, [refreshUser]);
 
   /**
    * 登录
    */
   const login = useCallback(async (username: string, password: string): Promise<boolean> => {
+    const request = ++authRequest.current;
     setIsLoading(true);
     setError(null);
     
     try {
       const result = await apiLogin(username, password);
+      if (request !== authRequest.current) return false;
       setToken(result.token);
       
       // 获取完整用户信息
       const userInfo = await getCurrentUser();
+      if (request !== authRequest.current) return false;
       setUser(userInfo);
       setIsLoggedIn(true);
       
       return true;
     } catch (err: any) {
+      if (request !== authRequest.current) return false;
       setError(err.message);
       return false;
     } finally {
-      setIsLoading(false);
+      if (request === authRequest.current) setIsLoading(false);
     }
   }, []);
 
@@ -104,11 +128,13 @@ export function useAuth(): UseAuthReturn {
    * 注册
    */
   const register = useCallback(async (username: string, password: string): Promise<boolean> => {
+    const request = ++authRequest.current;
     setIsLoading(true);
     setError(null);
     
     try {
       const result = await apiRegister(username, password);
+      if (request !== authRequest.current) return false;
       setToken(result.token);
       
       // 设置用户信息
@@ -125,10 +151,11 @@ export function useAuth(): UseAuthReturn {
       
       return true;
     } catch (err: any) {
+      if (request !== authRequest.current) return false;
       setError(err.message);
       return false;
     } finally {
-      setIsLoading(false);
+      if (request === authRequest.current) setIsLoading(false);
     }
   }, []);
 
@@ -136,10 +163,12 @@ export function useAuth(): UseAuthReturn {
    * 登出
    */
   const logout = useCallback(() => {
+    authRequest.current++;
     clearToken();
     setIsLoggedIn(false);
     setUser(null);
     setError(null);
+    setIsLoading(false);
   }, []);
 
   return {

@@ -319,6 +319,16 @@ This project adopts the Socratic teaching methodology from [CFP-Study](https://g
 - ✅ GetNotes search integration
 - ✅ Mistake notebook functionality
 
+## 本地验证与缓存边界
+
+- `npm test` 使用模拟的 AI、数据库、网络和存储，不读取真实凭据或学生数据。
+- `npm run build` 验证网页构建；根目录与移动目录分别运行 `./node_modules/.bin/tsc --noEmit` 验证类型。
+- 网页退出、跨标签页换账号和旧请求晚到的处理有回归测试；浏览器和原生设备仍需独立验收。
+- 导师的学习、复习、测验模式使用不同提示词。模拟测试验证指令和会话隔离，不代表真实模型教学效果已通过验收。
+- 网页和移动缓存按用户隔离。退出保留本人缓存；旧全局缓存和旧 `gaokao_cache.db` 不读取、不自动迁移或删除，因为无法确认归属。
+- 移动端错题列表尚未接入离线缓存回退；当前同步接口只下载服务器错题，不上传本地未同步错题。因此尚不能视为完整的离线双向同步。
+- 移动端 `npm run lint` 目前缺少锁文件中的 ESLint 依赖，不能作为已通过的检查。
+
 ## 📄 License
 
 MIT License

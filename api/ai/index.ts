@@ -93,13 +93,22 @@ async function handleTutor(req: VercelRequest, res: VercelResponse, userId: stri
   const { sessionId, message, subject, topic, mode = 'learn' } = req.body;
   if (typeof message !== 'string' || message.trim().length === 0) return sendError(res, 'INVALID_REQUEST', '请输入消息', 400);
   if (typeof subject !== 'string' || !VALID_SUBJECTS.includes(subject)) return sendError(res, 'INVALID_REQUEST', '请选择有效学科', 400);
+  if (typeof mode !== 'string' || !['learn', 'review', 'quiz'].includes(mode)) return sendError(res, 'INVALID_REQUEST', '请选择有效学习模式', 400);
+
+  const modeInstructions = {
+    learn: '学习模式：从基础概念开始，通过简短解释和逐步提问建立理解。',
+    review: '复习模式：先诊断薄弱点，让学生回忆知识，再针对错误提供反馈和巩固练习。',
+    quiz: '测验模式：一次只出一道题，学生作答前不提供答案；作答后点评并给出下一题。',
+  };
 
   const db = getDatabase();
   let session = { id: sessionId, isNew: false };
 
   if (sessionId) {
     const existing = await db.getTutorSession(sessionId, userId);
-    if (!existing) session = { id: generateId(), isNew: true };
+    if (!existing || existing.subject !== subject || existing.session_type !== mode) {
+      session = { id: generateId(), isNew: true };
+    }
   } else {
     session = { id: generateId(), isNew: true };
   }
@@ -126,6 +135,7 @@ async function handleTutor(req: VercelRequest, res: VercelResponse, userId: stri
   }
 
   const prompt = `你是高考${SUBJECT_NAMES[subject] || subject}辅导老师，采用苏格拉底式教学法。
+${modeInstructions[mode as keyof typeof modeInstructions]}
 ${topic ? `知识点：${topic}` : ''}
 ${historyContext ? `\n对话历史：\n${historyContext}` : ''}
 ${knowledgeContext ? `\n知识库参考：\n${knowledgeContext.substring(0, 1500)}` : ''}

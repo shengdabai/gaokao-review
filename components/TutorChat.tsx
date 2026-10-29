@@ -51,6 +51,7 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const modeDropdownRef = useRef<HTMLDivElement>(null);
+    const chatRequest = useRef(0);
 
     // 滚动到底部
     const scrollToBottom = () => {
@@ -77,15 +78,20 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
 
     // 切换学科时重置对话
     useEffect(() => {
+        chatRequest.current++;
         setMessages([]);
         setSessionId(null);
         setTopic('');
-    }, [subject.id]);
+        setInput('');
+        setIsLoading(false);
+        return () => { chatRequest.current++; };
+    }, [subject.id, mode]);
 
     // 发送消息
     const sendMessage = async (messageText?: string) => {
         const text = messageText || input.trim();
         if (!text || isLoading) return;
+        const request = ++chatRequest.current;
 
         // 添加用户消息
         const userMessage: Message = {
@@ -106,6 +112,7 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
                 topic: topic || undefined,
                 mode,
             });
+            if (request !== chatRequest.current) return;
 
             // 保存 sessionId
             if (!sessionId) {
@@ -122,6 +129,7 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
             setMessages(prev => [...prev, assistantMessage]);
 
         } catch (error: any) {
+            if (request !== chatRequest.current) return;
             console.error('Chat error:', error);
 
             if (error.code === 'UNAUTHORIZED') {
@@ -138,14 +146,16 @@ export const TutorChat: React.FC<Props> = ({ subject, onLogout }) => {
             };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
-            setIsLoading(false);
+            if (request === chatRequest.current) setIsLoading(false);
         }
     };
 
     // 开始新对话
     const startNewChat = () => {
+        chatRequest.current++;
         setMessages([]);
         setSessionId(null);
+        setIsLoading(false);
     };
 
     // 处理按键

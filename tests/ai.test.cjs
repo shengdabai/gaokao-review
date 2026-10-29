@@ -6,12 +6,13 @@ const vm = require('node:vm');
 const ts = require('typescript');
 
 // Run the real handler with synthetic data; never load credentials, a DB or an SDK.
-function createApi(output = 'fixture answer') {
+function createApi(output = 'fixture answer', existingSession) {
   const calls = { model: [], database: [], network: 0 };
   const database = Object.fromEntries([
-    'getWeakTopics', 'getTutorMessages', 'createTutorSession', 'createTutorMessage',
+    'getWeakTopics', 'getTutorMessages', 'getTutorSession', 'createTutorSession', 'createTutorMessage',
   ].map(name => [name, async (...args) => {
     calls.database.push({ name, args });
+    if (name === 'getTutorSession') return existingSession;
     return [];
   }]));
   const mocks = {
@@ -166,3 +167,47 @@ test('tutor: valid new conversation still stores both messages', async () => {
   assert.equal(response.body.data.response, 'fixture reply');
   assert.equal(api.calls.database.filter(call => call.name === 'createTutorMessage').length, 2);
 });
+
+for (const [mode, instruction] of [
+  ['learn', '从基础概念开始'],
+  ['review', '先诊断薄弱点'],
+  ['quiz', '一次只出一道题'],
+]) {
+  test(`tutor: ${mode} supplies its teaching instructions to the model`, async () => {
+    const api = createApi('fixture reply');
+    const response = await api.request('tutor', { message: '函数', subject: 'math', mode });
+    assert.equal(response.statusCode, 200);
+    assert.ok(api.calls.model[0].includes(instruction));
+    if (mode === 'quiz') assert.ok(api.calls.model[0].includes('学生作答前不提供答案'));
+    assert.equal(api.calls.database.find(c => c.name === 'createTutorSession').args[4], mode);
+  });
+}
+
+for (const mode of [null, true, ['quiz'], 'invalid', '__proto__', 'toString']) {
+  test(`tutor: rejects invalid mode ${JSON.stringify(mode)} before DB/model work`, async () => {
+    const api = createApi();
+    const response = await api.request('tutor', { message: '函数', subject: 'math', mode });
+    assert.equal(response.statusCode, 400);
+    assert.equal(api.calls.database.length, 0);
+    assert.equal(api.calls.model.length, 0);
+  });
+}
+
+for (const [label, existingSession, reused] of [
+  ['same subject and mode', { subject: 'math', session_type: 'learn' }, true],
+  ['different subject', { subject: 'physics', session_type: 'learn' }, false],
+  ['different mode', { subject: 'math', session_type: 'quiz' }, false],
+  ['unknown or other account session', undefined, false],
+]) {
+  test(`tutor: ${label} ${reused ? 'reuses' : 'replaces'} the session`, async () => {
+    const api = createApi('fixture reply', existingSession);
+    const response = await api.request('tutor', { sessionId: 'previous-session', message: '函数', subject: 'math' });
+    assert.equal(response.statusCode, 200);
+    const lookup = api.calls.database.find(c => c.name === 'getTutorSession');
+    assert.deepEqual(Array.from(lookup.args), ['previous-session', 'fixture-user']);
+    assert.equal(response.body.data.sessionId, reused ? 'previous-session' : 'fixture-id');
+    assert.equal(api.calls.database.filter(c => c.name === 'createTutorSession').length, reused ? 0 : 1);
+    assert.ok(api.calls.database.filter(c => c.name === 'createTutorMessage' || c.name === 'getTutorMessages')
+      .every(c => c.args[c.name === 'createTutorMessage' ? 1 : 0] === response.body.data.sessionId));
+  });
+}

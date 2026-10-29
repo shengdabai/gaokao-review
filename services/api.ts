@@ -64,6 +64,14 @@ async function apiRequest<T>(
 
   const result: ApiResponse<T> = await response.json();
 
+  // A response belongs to the account that sent it, including delayed 401s.
+  // Never deliver old account data/errors to a page using a replacement token.
+  if (getToken() !== token) {
+    const error = new Error('登录状态已变化，请重试');
+    (error as any).code = 'SESSION_CHANGED';
+    throw error;
+  }
+
   if (!result.success) {
     const error = new Error(result.error?.message || '请求失败');
     (error as any).code = result.error?.code;

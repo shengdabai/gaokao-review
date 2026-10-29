@@ -3,7 +3,7 @@
  * 基于历年真题分析考点趋势，预测复习重点
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     TrendingUp, Target, Lightbulb, BookOpen, Loader2,
     Flame, BarChart3, Clock, CheckCircle2, AlertTriangle
@@ -20,23 +20,36 @@ export const PredictAnalysis: React.FC<Props> = ({ subject, onLogout }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [result, setResult] = useState<api.PredictResult | null>(null);
     const [error, setError] = useState('');
+    const analysisRequest = useRef(0);
+
+    useEffect(() => {
+        analysisRequest.current++;
+        setTopic('');
+        setResult(null);
+        setError('');
+        setIsAnalyzing(false);
+        return () => { analysisRequest.current++; };
+    }, [subject.id]);
 
     const handleAnalyze = async () => {
+        const request = ++analysisRequest.current;
         setIsAnalyzing(true);
         setError('');
         setResult(null);
 
         try {
             const data = await api.predictExam(subject.id, topic || undefined);
+            if (request !== analysisRequest.current) return;
             setResult(data);
         } catch (err: any) {
+            if (request !== analysisRequest.current) return;
             if (err.code === 'UNAUTHORIZED') {
                 onLogout();
             } else {
                 setError(err.message || '分析失败，请重试');
             }
         } finally {
-            setIsAnalyzing(false);
+            if (request === analysisRequest.current) setIsAnalyzing(false);
         }
     };
 
