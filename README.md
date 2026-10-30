@@ -91,9 +91,13 @@ POSTGRES_URL=YOUR_POSTGRES_CONNECTION_URL
 # 仅前端
 npm run dev
 
-# 含 API（需 Vercel CLI）
+# 含 API（需全局安装的 Vercel CLI）
+npm install -g vercel
+vercel login
 npm run api:dev
 ```
+
+Vercel CLI 不在 `devDependencies` 里，需要像上面这样全局安装：它会把带已知漏洞的 undici 5 带进 lockfile，而构建、测试和部署都不需要本地副本。线上 API 函数使用 `vercel.json` 固定的 `@vercel/node@3.2.0` 运行时；`devDependencies` 里的 `@vercel/node` 只为 `api/` 提供 `VercelRequest` / `VercelResponse` 类型；它固定依赖的 undici 5 在 `package.json` 的 `overrides` 里改成了 6.x，本项目不会运行这部分代码。
 
 ### 4. 初始化数据库
 

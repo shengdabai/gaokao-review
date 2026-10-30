@@ -31,10 +31,12 @@
     "@vercel/node": "^13.0.1",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
-    "vercel": "^59.23.2",
     "vite": "^6.2.0"
   },
   "overrides": {
-    "tar": "^7.5.22"
+    "tar": "^7.5.22",
+    "@vercel/node": {
+      "undici": "^6.29.1"
+    }
   }
 }
