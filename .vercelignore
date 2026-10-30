@@ -1,0 +1,2 @@
+# Tests run with node --test locally; vercel.json builds api/**/*.ts as functions, so keep them out of the deployment.
+api/**/*.test.ts

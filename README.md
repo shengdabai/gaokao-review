@@ -97,9 +97,7 @@ npm run api:dev
 
 ### 4. 初始化数据库
 
-```bash
-npm run db:init
-```
+无需手动操作：表在首次 API 请求时由 `api/lib/db.ts` 自动创建。
 
 ### 5. 部署到生产环境
 

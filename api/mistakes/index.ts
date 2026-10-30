@@ -13,6 +13,7 @@ import { authenticateRequest } from '../lib/auth';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
 import { handleCors } from '../lib/cors';
 import { VALID_SUBJECTS, safeJsonParse } from '../lib/constants';
+import { MAX_IMAGE_BYTES, MAX_IMAGE_URL_LENGTH, isHttpsUrl, isNonEmptyString, isSubjectId, normalizeTags, parseDataImage } from '../lib/validate';
 
 // 获取错题列表
 async function handleGetList(req: VercelRequest, res: VercelResponse, userId: string) {
@@ -73,13 +74,21 @@ async function handleGetOne(req: VercelRequest, res: VercelResponse, userId: str
 async function handleAdd(req: VercelRequest, res: VercelResponse, userId: string) {
   const db = getDatabase();
   const { subject, imageUrl, analysis, tags: rawTags } = req.body;
-  const tags = Array.isArray(rawTags) ? rawTags : [];
+  // 标签最多 20 个、每个最多 30 字；超出部分截断，不拒绝保存
+  const tags = normalizeTags(rawTags, 20, 30);
 
-  if (!subject || !VALID_SUBJECTS.includes(subject)) {
+  if (!isSubjectId(subject, VALID_SUBJECTS)) {
     return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
   }
   if (!imageUrl) return sendError(res, 'INVALID_REQUEST', '请提供题目图片', 400);
+  // data URL：合法 Base64 图片，解码后最多 3 MB；https 地址：可解析、有主机名，最多 2048 字
+  if (!parseDataImage(imageUrl, MAX_IMAGE_BYTES) && !isHttpsUrl(imageUrl, MAX_IMAGE_URL_LENGTH)) {
+    return sendError(res, 'INVALID_REQUEST', '图片格式无效或过大（最多 3 MB）', 400);
+  }
   if (!analysis) return sendError(res, 'INVALID_REQUEST', '请提供分析内容', 400);
+  if (!isNonEmptyString(analysis, 20000)) {
+    return sendError(res, 'INVALID_REQUEST', '分析内容无效或过长（最多 20000 字）', 400);
+  }
 
   const mistakeId = generateId();
   const now = new Date().toISOString();

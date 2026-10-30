@@ -11,7 +11,8 @@ import { authenticateRequest } from '../lib/auth';
 import { getDatabase, generateId } from '../lib/db';
 import { sendSuccess, sendError, sendPredefinedError } from '../lib/response';
 import { handleCors } from '../lib/cors';
-import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES } from '../lib/constants';
+import { GETNOTES_TOPIC_IDS, SUBJECT_NAMES, VALID_SUBJECTS } from '../lib/constants';
+import { isSubjectId } from '../lib/validate';
 
 // API 配置
 const GETNOTES_URL = process.env.GETNOTES_WEBHOOK_URL || '';
@@ -88,12 +89,17 @@ ${subjectHint}
 async function handleSearch(req: VercelRequest, res: VercelResponse, userId: string) {
     const { query, subject } = req.body as SearchBody;
 
-    if (!query || query.trim().length === 0) {
+    if (typeof query !== 'string' || query.trim().length === 0) {
         return sendError(res, 'INVALID_REQUEST', '请输入搜索关键词', 400);
     }
 
     if (query.length > 200) {
         return sendError(res, 'INVALID_REQUEST', '搜索关键词过长', 400);
+    }
+
+    // subject 可选；提供时必须是有效学科（会写入搜索历史）
+    if (subject !== undefined && subject !== null && subject !== '' && !isSubjectId(subject, VALID_SUBJECTS)) {
+        return sendError(res, 'INVALID_REQUEST', '无效的学科', 400);
     }
 
     // 保存搜索历史
