@@ -37,3 +37,6 @@ data/
 
 # Vercel
 .vercel
+
+# 本地 MCP 配置,勿提交
+.mcp.json
