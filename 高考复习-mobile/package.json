@@ -33,6 +33,15 @@
     "@types/react": "~18.2.0",
     "typescript": "~5.3.0"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "markdown-it": "^14.3.3",
+    "@expo/metro-config": {
+      "postcss": "^8.5.23"
+    },
+    "@expo/plist": {
+      "@xmldom/xmldom": "^0.8.15"
+    }
+  }
 }
 
